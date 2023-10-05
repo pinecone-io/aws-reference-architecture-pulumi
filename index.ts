@@ -2,15 +2,15 @@ import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as awsx from "@pulumi/awsx";
 
-// Create an AWS resource (S3 Bucket)
-const bucket = new aws.s3.Bucket("roies-bucket");
+// Context: see https://www.notion.so/AWS-Pinecone-Reference-Architecture-in-Pulumi-PRD-61245ccff1f040499b5e2417f92eee77
 
-for (var i = 0; i < 10; i++) {
-  const pbucket = new aws.s3.Bucket(`roies-choice-${i}`);
-  console.log(`pbucket: ${pbucket}`)
-}
+// Create an S3 bucket to store video frames
+const bucket = new aws.s3.Bucket("input bucket");
 
-//const whyServerThisWay = new aws.ec2.Instance()
+const firstWorkerServer = new aws.ec2.Instance("worker1", { ami: "ami-067d1e60475437da2", instanceType: "t2.micro" })
 
 // Export the name of the bucket
 export const bucketName = bucket.id;
+
+export const workerInstanceId = firstWorkerServer.id
+
