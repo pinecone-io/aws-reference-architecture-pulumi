@@ -11,11 +11,18 @@ import * as awsx from "@pulumi/awsx";
 // Create an S3 bucket to store video frames
 const bucket = new aws.s3.Bucket("input-bucket");
 
-// Create an SNS topic to handle dead letter notifications
-const sns = new aws.sns.Topic("failed-jobs")
-
 // Create an SQS queue to handle dead letters
 const deadletterQueue = new aws.sqs.Queue("dead-letter")
+
+// Create an SNS topic to handle dead letter notifications
+const deadLetterTopic = new aws.sns.Topic("failed-jobs")
+
+// Subscribe to the SNS Topic
+new aws.sns.TopicSubscription("dlQueueSubscription", {
+  topic: deadLetterTopic.arn,
+  protocol: "sqs",
+  endpoint: deadletterQueue.arn
+});
 
 // Create an SQS queue to handle jobs messages - and configure it to send its failed jobs to 
 // the dead letter queue
