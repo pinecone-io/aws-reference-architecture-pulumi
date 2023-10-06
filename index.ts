@@ -11,6 +11,9 @@ import * as awsx from "@pulumi/awsx";
 // Create an S3 bucket to store video frames
 const bucket = new aws.s3.Bucket("input-bucket");
 
+// Create an SQS queue to handle jobs messages
+const queue = new aws.sqs.Queue("job-queue")
+
 // Create an Elastic Container Registry (ECR) to hold Docker images we plan to ship for the workers
 const registry = new aws.ecr.Repository("docker-registry")
 
@@ -32,7 +35,6 @@ for (var i = 0; i < 4; i++) {
  * Whatever values are exported here will be output in pulumi's terminal output that displays following an update:
  */
 export const bucketName = bucket.id;
+export const queueId = queue.id
 export const registryId = registry.id
 export const workerInstanceIds = workerServers.forEach((id) => id)
-
-
