@@ -1,10 +1,75 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as awsx from "@pulumi/awsx";
-import * as fs from 'fs';
+import * as process from 'process'
 
 // Context: see https://www.notion.so/AWS-Pinecone-Reference-Architecture-in-Pulumi-PRD-61245ccff1f040499b5e2417f92eee77
 
+/**
+ * Frontend app ECS Service and Docker registry
+ */
+
+const repo = new aws.ecr.Repository("frontend");
+
+// Directly use the repository's registryId property to get registry details
+const registryId = repo.registryId
+
+// This is an object containing authentication information to the ECR registry containing the docker image
+const registryInfo = registryId.apply(async (id) => {
+  const credentials = await aws.ecr.getCredentials({ registryId: id });
+  // Decode the authorization token from base64
+  const decodedToken = Buffer.from(credentials.authorizationToken, 'base64').toString();
+  // The token is in format USERNAME:PASSWORD
+  const [username, password] = decodedToken.split(':');
+  return {
+    server: id,
+    username,
+    password,
+  }
+});
+
+const cluster = new aws.ecs.Cluster("cluster");
+
+const service = new awsx.ecs.FargateService("app-svc", {
+  cluster: cluster.name,
+  taskDefinitionArgs: {
+    containers: {
+      app: {
+        name: "frontend-service",
+        image: pulumi.interpolate`${repo.repositoryUrl}:latest`,
+        memory: 512,
+        portMappings: [{ name: "frontend", containerPort: 3000 }],
+        environment: [
+          { name: "PINECONE_API_KEY", value: process.env.PINECONE_API_KEY },
+          { name: "PINECONE_ENVIRONMENT", value: process.env.PINECONE_ENVIRONMENT },
+          { name: "PINECONE_INDEX", value: process.env.PINECONE_INDEX },
+          { name: "OPENAI_API_KEY", value: process.env.OPENAI_API_KEY },
+          { name: "POSTGRES_DB_NAME", value: process.env.POSTGRES_DB_NAME },
+          { name: "POSTGRES_DB_HOST", value: process.env.POSTGRES_DB_HOST },
+          { name: "POSTGRES_DB_PORT", value: process.env.POSTGRES_DB_PORT },
+          { name: "POSTGRES_DB_USER", value: process.env.POSTGRES_DB_USER },
+          { name: "POSTGRES_DB_PASSWORD", value: process.env.POSTGRES_DB_PASSWORD },
+          { name: "CERTIFICATE_BASE64", value: process.env.CERTIFICATE_BASE64 },
+        ],
+      },
+    },
+  },
+  desiredCount: 1,
+  assignPublicIp: true,
+});
+
+const autoscaling = new aws.appautoscaling.Policy("autoscaling", {
+  resourceId: pulumi.interpolate`service/${cluster.name}/${service.service.name}`,
+  serviceNamespace: "ecs",
+  scalableDimension: "ecs:service:DesiredCount",
+  policyType: "TargetTrackingScaling",
+  targetTrackingScalingPolicyConfiguration: {
+    targetValue: 50,
+    predefinedMetricSpecification: {
+      predefinedMetricType: "ECSServiceAverageCPUUtilization",
+    },
+  },
+});
 
 /**
  * Supporting resources
@@ -34,36 +99,18 @@ const jobQueue = new aws.sqs.Queue("job-queue", {
   }))
 });
 
-// Create an Elastic Container Registry (ECR) to hold Docker images we plan to ship for the workers
-const registry = new aws.ecr.Repository("docker-registry")
-
-/**
- * Worker tier
- */
-// Create an array to hold the worker servers we've created
-let workerServers = [];
-
-// Read the uniform userData script into memory, which each EC2 instance worker will run upon booting:w
-const userDataScript = fs.readFileSync("./userdata/userdata.sh", { encoding: "utf8" })
-
-// Create 4 worker EC2 instances, all using the same Amazon Machine Image (AMI) and instance type
-for (var i = 0; i < 4; i++) {
-  const workerServer = new aws.ec2.Instance(`worker-${i}`, {
-    // Default Amazon linux AMI available in all accounts
-    ami: "ami-067d1e60475437da2",
-    instanceType: "t2.micro",
-    userData: userDataScript
-  })
-  workerServers.push(workerServer.id)
-}
-
 /**
  * Exports
  *
  * Whatever values are exported here will be output in pulumi's terminal output that displays following an update:
  */
+
+export const repositoryUrl = repo.repositoryUrl;
+export const clusterName = cluster.name;
+export const serviceName = service.service.name;
+export const autoscalingArn = autoscaling.arn
+
 export const bucketName = bucket.id;
 export const deadLetterQueueId = deadletterQueue.id
 export const jobQueueId = jobQueue.id
-export const registryId = registry.id
-export const workerInstanceIds = workerServers.forEach((id) => id)
+export const ecrRegistryId = registryId

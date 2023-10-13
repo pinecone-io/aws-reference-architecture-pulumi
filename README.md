@@ -65,6 +65,45 @@ necessary to make the changes in your AWS account.
 Once we've figured out Roie's use case and have the infrastructure working properly, we'll generalize this into a generic starting point 
 that anyone can use to deploy their own Production-ready high-scale distributed system for creating embeddings and upserting them to Pinecone.
 
+## Docker instructions: frontend app
+
+Run the `./build-docker.sh` script in the [`semantic-search-postgres` repository](https://github.com/pinecone-io/semantic-search-postgres). 
+
+This script will detect any missing environment variables you still need to set by exporting them in your shell like so: 
+
+`export PINECONE_API_KEY=<your-api-key>`
+
+Once all required environment variables are set, the script will perform the docker build, passing the secrets via build args into the docker build.
+
+When the build completes, you'll have the frontend image built locally on your machine. You now need to get this image into the AWS ECR registry. 
+
+First, log into the registry via the `aws` CLI to retrieve an authentication token you can use for your subsequent Docker commands: 
+
+For example:
+
+`aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 675304494746.dkr.ecr.us-east-1.amazonaws.com`
+
+If you defined your aws credentials via the `~/.aws/credentials` file, you will need to pass the `--profile` flag like so: 
+
+`aws --profile pulumi ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 675304494746.dkr.ecr.us-east-1.amazonaws.com`
+
+If this command succeeds you'll get `Login succeeded!` in your terminal, meaning that subsequent Docker commands in your shell will use this authentication token 
+when communicating with the ECR registry.
+
+You then need to tag your local image that you just built via the `build-docker.sh` script as destined for the ECR registry, like so: 
+
+`docker tag semantic-app:latest 675304494746.dkr.ecr.us-east-1.amazonaws.com/frontend-c97ebf7:latest`
+
+Note that the ECR registry ID and aws region forming the the ECR tag will be specific to your AWS account. 
+
+You can now push your image via the full ECR tag like so: 
+
+`docker push 675304494746.dkr.ecr.us-east-1.amazonaws.com/frontend-c97ebf7:latest`
+
+You should see output referring to pushing Docker image layers to AWS ECR.
+
+You can log into the UI or aws the `aws` command line to ensure the image was successfully pushed. 
+
 ## Roie’s Wishlist
 
 This is what we currently believe we're going to need to get Roie's video frame processing demo working end to end on AWS at scale:
