@@ -1,72 +1,58 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as awsx from "@pulumi/awsx";
-import * as process from 'process'
 
 // Context: see https://www.notion.so/AWS-Pinecone-Reference-Architecture-in-Pulumi-PRD-61245ccff1f040499b5e2417f92eee77
 
 /**
- * Frontend app ECS Service and Docker registry
+ * Frontend app Docker registry
  */
-
 const repo = new aws.ecr.Repository("frontend");
 
 // Directly use the repository's registryId property to get registry details
 const registryId = repo.registryId
 
-// This is an object containing authentication information to the ECR registry containing the docker image
-const registryInfo = registryId.apply(async (id) => {
-  const credentials = await aws.ecr.getCredentials({ registryId: id });
-  // Decode the authorization token from base64
-  const decodedToken = Buffer.from(credentials.authorizationToken, 'base64').toString();
-  // The token is in format USERNAME:PASSWORD
-  const [username, password] = decodedToken.split(':');
-  return {
-    server: id,
-    username,
-    password,
-  }
+/**
+ * Frontend application ECS service and networking 
+ */
+const frontendCluster = new awsx.classic.ecs.Cluster("cluster", {});
+const alb = new awsx.classic.lb.ApplicationLoadBalancer("lb", { external: true, securityGroups: frontendCluster.securityGroups });
+
+const targetGroup = alb.createTargetGroup("frontend", {
+  port: 3000,
+  targetType: "ip",
+  protocol: "HTTP",
+})
+
+// Create a Listener that listens on port 80 and forwards traffic to the new Target Group
+const listener = alb.createListener("listener", {
+  port: 80,
+  targetGroup: targetGroup,
 });
 
-const cluster = new aws.ecs.Cluster("cluster");
-
-const service = new awsx.ecs.FargateService("app-svc", {
-  cluster: cluster.name,
-  taskDefinitionArgs: {
-    containers: {
-      app: {
-        name: "frontend-service",
-        image: pulumi.interpolate`${repo.repositoryUrl}:latest`,
-        memory: 512,
-        portMappings: [{ name: "frontend", containerPort: 3000 }],
-        environment: [
-          { name: "PINECONE_API_KEY", value: process.env.PINECONE_API_KEY },
-          { name: "PINECONE_ENVIRONMENT", value: process.env.PINECONE_ENVIRONMENT },
-          { name: "PINECONE_INDEX", value: process.env.PINECONE_INDEX },
-          { name: "OPENAI_API_KEY", value: process.env.OPENAI_API_KEY },
-          { name: "POSTGRES_DB_NAME", value: process.env.POSTGRES_DB_NAME },
-          { name: "POSTGRES_DB_HOST", value: process.env.POSTGRES_DB_HOST },
-          { name: "POSTGRES_DB_PORT", value: process.env.POSTGRES_DB_PORT },
-          { name: "POSTGRES_DB_USER", value: process.env.POSTGRES_DB_USER },
-          { name: "POSTGRES_DB_PASSWORD", value: process.env.POSTGRES_DB_PASSWORD },
-          { name: "CERTIFICATE_BASE64", value: process.env.CERTIFICATE_BASE64 },
-        ],
-      },
-    },
-  },
-  desiredCount: 1,
+const frontendService = new awsx.classic.ecs.FargateService("service", {
+  cluster: frontendCluster,
   assignPublicIp: true,
-});
-
-const autoscaling = new aws.appautoscaling.Policy("autoscaling", {
-  resourceId: pulumi.interpolate`service/${cluster.name}/${service.service.name}`,
-  serviceNamespace: "ecs",
-  scalableDimension: "ecs:service:DesiredCount",
-  policyType: "TargetTrackingScaling",
-  targetTrackingScalingPolicyConfiguration: {
-    targetValue: 50,
-    predefinedMetricSpecification: {
-      predefinedMetricType: "ECSServiceAverageCPUUtilization",
+  desiredCount: 2,
+  taskDefinitionArgs: {
+    container: {
+      image: pulumi.interpolate`${repo.repositoryUrl}:latest`,
+      cpu: 512,
+      memory: 128,
+      essential: true,
+      portMappings: [listener],
+      environment: [
+        { name: "PINECONE_API_KEY", value: process.env.PINECONE_API_KEY as string },
+        { name: "PINECONE_ENVIRONMENT", value: process.env.PINECONE_ENVIRONMENT as string },
+        { name: "PINECONE_INDEX", value: process.env.PINECONE_INDEX as string },
+        { name: "OPENAI_API_KEY", value: process.env.OPENAI_API_KEY as string },
+        { name: "POSTGRES_DB_NAME", value: process.env.POSTGRES_DB_NAME as string },
+        { name: "POSTGRES_DB_HOST", value: process.env.POSTGRES_DB_HOST as string },
+        { name: "POSTGRES_DB_PORT", value: process.env.POSTGRES_DB_PORT as string },
+        { name: "POSTGRES_DB_USER", value: process.env.POSTGRES_DB_USER as string },
+        { name: "POSTGRES_DB_PASSWORD", value: process.env.POSTGRES_DB_PASSWORD as string },
+        { name: "CERTIFICATE_BASE64", value: process.env.CERTIFICATE_BASE64 as string },
+      ],
     },
   },
 });
@@ -104,11 +90,10 @@ const jobQueue = new aws.sqs.Queue("job-queue", {
  *
  * Whatever values are exported here will be output in pulumi's terminal output that displays following an update:
  */
-
 export const repositoryUrl = repo.repositoryUrl;
-export const clusterName = cluster.name;
-export const serviceName = service.service.name;
-export const autoscalingArn = autoscaling.arn
+
+export const frontendServiceUrl = alb.loadBalancer.dnsName;
+export const serviceUrn = frontendService.urn
 
 export const bucketName = bucket.id;
 export const deadLetterQueueId = deadletterQueue.id
