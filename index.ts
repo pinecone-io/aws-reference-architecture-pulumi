@@ -58,6 +58,39 @@ const frontendService = new awsx.classic.ecs.FargateService("service", {
 });
 
 /**
+ * Backend - RDS Postrges database
+ */
+
+// Configure the RDS security group to only accept traffic from the ECS service's security group
+const rdsSecurityGroup = new aws.ec2.SecurityGroup("rdsSecurityGroup", {
+  egress: [{
+    protocol: "-1",
+    fromPort: 0,
+    toPort: 0,
+    cidrBlocks: ["0.0.0.0/0"],
+  }],
+  ingress: [{
+    protocol: "tcp",
+    fromPort: 5432,
+    toPort: 5432,
+    securityGroups: frontendCluster.securityGroups.map(sg => sg.id), // Referencing ECS cluster's security groups
+  }],
+});
+
+const db = new aws.rds.Instance("mydb", {
+  engine: "postgres",
+  engineVersion: "15.4",
+  instanceClass: "db.t3.micro",
+  allocatedStorage: 20,
+  storageType: "gp2",
+  username: process.env.POSTGRES_DB_USER,
+  password: process.env.POSTGRES_DB_PASSWORD,
+  parameterGroupName: "default.postgres15",
+  skipFinalSnapshot: true,
+  vpcSecurityGroupIds: [rdsSecurityGroup.id],
+});
+
+/**
  * Supporting resources
  */
 // Create an S3 bucket to store video frames
@@ -94,6 +127,8 @@ export const repositoryUrl = repo.repositoryUrl;
 
 export const frontendServiceUrl = alb.loadBalancer.dnsName;
 export const serviceUrn = frontendService.urn
+
+export const dbEndpoint = db.endpoint;
 
 export const bucketName = bucket.id;
 export const deadLetterQueueId = deadletterQueue.id
