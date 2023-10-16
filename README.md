@@ -5,6 +5,42 @@
 This repo is the initial scratch repo for figuring out how to work with Pulumi and define the AWS archtitecture required to get Roie's 
 object search through video application stood up and working in a Production-ready manner. 
 
+## Proposed architecture 
+
+```mermaid
+graph TD;
+
+    subgraph Frontend
+        GitHub[GitHub Repo with Dockerfile]
+        ECS_Frontend[ECS Service]
+        Docker_Frontend[Docker Image with Frontend App]
+    end
+    
+    subgraph Backend
+        RDS[RDS Postgres Database]
+        Lambda[AWS Lambda]
+        SQS1[Jobs SQS Queue]
+        SQS2[Dead Letter SQS Queue]
+        SNS[SNS Topic for Dead Letter Alerts]
+    end
+    
+    subgraph Distributed Processing
+        ECS_Backend[ECS Cluster]
+        Docker1[Docker Worker 1]
+        Docker2[Docker Worker 2]
+        ...
+        DockerN[Docker Worker N]
+        OutputS3[Output S3 Bucket]
+    end
+    
+    GitHub --> ECS_Frontend --> Docker_Frontend --> RDS
+    RDS --> Lambda --> SQS1 --> ECS_Backend
+    ECS_Backend --> Docker1 --> OutputS3
+    ECS_Backend --> Docker2 --> OutputS3
+    ECS_Backend --> DockerN --> OutputS3
+    SQS2 --> SNS
+```
+
 ## Getting started: 
 
 ### Step 1. Install Pulumi 
