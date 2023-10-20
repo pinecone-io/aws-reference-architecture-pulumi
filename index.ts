@@ -1,8 +1,36 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as awsx from "@pulumi/awsx";
+import { VpcSubnetType } from "@pulumi/awsx/classic/ec2";
 
 // Context: see https://www.notion.so/AWS-Pinecone-Reference-Architecture-in-Pulumi-PRD-61245ccff1f040499b5e2417f92eee77
+
+
+/**
+ * Networking
+ */
+// Create VPC & subnets
+// TODO - fix conflicts
+const vpc = new awsx.classic.ec2.Vpc("vpc", {
+  cidrBlock: "10.0.0.0/16",
+  subnets: [
+    {
+      name: "public-subnet",
+      type: "public" as VpcSubnetType,
+      location: "10.0.0.0/18",
+    },
+    {
+      name: "db-subnet",
+      type: "private" as VpcSubnetType,
+      location: "10.0.64.0/18",
+    },
+    {
+      name: "pelican-subnet",
+      type: "private" as VpcSubnetType,
+      location: "10.0.192.0/18"
+    },
+  ]
+});
 
 /**
  * Frontend app Docker registry
@@ -32,6 +60,7 @@ const listener = alb.createListener("listener", {
 
 const frontendService = new awsx.classic.ecs.FargateService("service", {
   cluster: frontendCluster,
+  subnets: vpc.publicSubnetIds,
   assignPublicIp: true,
   desiredCount: 2,
   taskDefinitionArgs: {
@@ -77,7 +106,15 @@ const rdsSecurityGroup = new aws.ec2.SecurityGroup("rdsSecurityGroup", {
   }],
 });
 
+const dbSubnetGroup = new aws.rds.SubnetGroup("db-subnet-group", {
+  subnetIds: vpc.privateSubnetIds,
+  tags: {
+    Name: 'db-subnet',
+  }
+})
+
 const db = new aws.rds.Instance("mydb", {
+  dbSubnetGroupName: dbSubnetGroup.name,
   engine: "postgres",
   engineVersion: "15.4",
   instanceClass: "db.t3.micro",
@@ -88,6 +125,40 @@ const db = new aws.rds.Instance("mydb", {
   parameterGroupName: "default.postgres15",
   skipFinalSnapshot: true,
   vpcSecurityGroupIds: [rdsSecurityGroup.id],
+});
+
+/**
+ * Pelican app Docker registry
+ */
+const pelicanRepo = new aws.ecr.Repository("pelican");
+
+// Directly use the repository's registryId property to get registry details
+const pelicanRegistryId = pelicanRepo.registryId
+
+// Pelican is the microservice that listens to Postgres for changes and forwards changed records to Emu
+const pelicanCluster = new awsx.classic.ecs.Cluster("pelican-cluster", {});
+const pelicanService = new awsx.classic.ecs.FargateService("pelican-service", {
+  cluster: pelicanCluster,
+  subnets: vpc.privateSubnetIds,
+  assignPublicIp: false,
+  desiredCount: 2,
+  taskDefinitionArgs: {
+    container: {
+      image: pulumi.interpolate`${pelicanRepo.repositoryUrl}:latest`,
+      cpu: 512,
+      memory: 128,
+      essential: true,
+      environment: [
+        { name: "POSTGRES_DB_NAME", value: process.env.POSTGRES_DB_NAME as string },
+        { name: "POSTGRES_DB_HOST", value: process.env.POSTGRES_DB_HOST as string },
+        { name: "POSTGRES_DB_PORT", value: process.env.POSTGRES_DB_PORT as string },
+        { name: "POSTGRES_DB_USER", value: process.env.POSTGRES_DB_USER as string },
+        { name: "POSTGRES_DB_PASSWORD", value: process.env.POSTGRES_DB_PASSWORD as string },
+        { name: "CERTIFICATE_BASE64", value: process.env.CERTIFICATE_BASE64 as string },
+        { name: "EMU_ENDPOINT", value: process.env.EMU_ENDPOINT as string },
+      ],
+    },
+  },
 });
 
 /**
@@ -127,6 +198,7 @@ export const repositoryUrl = repo.repositoryUrl;
 
 export const frontendServiceUrl = alb.loadBalancer.dnsName;
 export const serviceUrn = frontendService.urn
+export const pelicanServiceUrn = pelicanService.urn
 
 export const dbEndpoint = db.endpoint;
 
@@ -134,3 +206,4 @@ export const bucketName = bucket.id;
 export const deadLetterQueueId = deadletterQueue.id
 export const jobQueueId = jobQueue.id
 export const ecrRegistryId = registryId
+export const pelicanEcrRegistryId = pelicanRegistryId 
