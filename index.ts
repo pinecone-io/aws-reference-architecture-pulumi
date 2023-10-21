@@ -9,29 +9,14 @@ import { VpcSubnetType } from "@pulumi/awsx/classic/ec2";
 /**
  * Networking
  */
-// Create VPC & subnets
-// TODO - fix conflicts
-const vpc = new awsx.classic.ec2.Vpc("vpc", {
-  cidrBlock: "10.0.0.0/16",
-  subnets: [
-    {
-      name: "public-subnet",
-      type: "public" as VpcSubnetType,
-      location: "10.0.0.0/18",
-    },
-    {
-      name: "db-subnet",
-      type: "private" as VpcSubnetType,
-      location: "10.0.64.0/18",
-    },
-    {
-      name: "pelican-subnet",
-      type: "private" as VpcSubnetType,
-      location: "10.0.192.0/18"
-    },
-  ]
-});
 
+// Allocate a new VPC with the default settings:
+const vpc = new awsx.ec2.Vpc("custom");
+
+// Export a few interesting fields to make them easy to use:
+export const vpcId = vpc.vpcId;
+export const vpcPrivateSubnetIds = vpc.privateSubnetIds;
+export const vpcPublicSubnetIds = vpc.publicSubnetIds;
 /**
  * Frontend app Docker registry
  */
@@ -60,7 +45,7 @@ const listener = alb.createListener("listener", {
 
 const frontendService = new awsx.classic.ecs.FargateService("service", {
   cluster: frontendCluster,
-  subnets: vpc.publicSubnetIds,
+  subnets: vpcPublicSubnetIds,
   assignPublicIp: true,
   desiredCount: 2,
   taskDefinitionArgs: {
@@ -107,10 +92,7 @@ const rdsSecurityGroup = new aws.ec2.SecurityGroup("rdsSecurityGroup", {
 });
 
 const dbSubnetGroup = new aws.rds.SubnetGroup("db-subnet-group", {
-  subnetIds: vpc.privateSubnetIds,
-  tags: {
-    Name: 'db-subnet',
-  }
+  subnetIds: vpcPrivateSubnetIds,
 })
 
 const db = new aws.rds.Instance("mydb", {
@@ -139,7 +121,7 @@ const pelicanRegistryId = pelicanRepo.registryId
 const pelicanCluster = new awsx.classic.ecs.Cluster("pelican-cluster", {});
 const pelicanService = new awsx.classic.ecs.FargateService("pelican-service", {
   cluster: pelicanCluster,
-  subnets: vpc.privateSubnetIds,
+  subnets: vpcPrivateSubnetIds,
   assignPublicIp: false,
   desiredCount: 2,
   taskDefinitionArgs: {
