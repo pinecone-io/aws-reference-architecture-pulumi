@@ -1,0 +1,13 @@
+name: "Integration Tests"
+description: "Run Integeation Tests"
+runs:
+  using: "composite"
+  steps:
+    - name: Run tests
+      shell: bash
+      env:
+        CI: true
+      run: pnpm test
+    - name: "Report Coverage"
+      if: always() # Also generate the report if tests are failing
+      uses: davelosert/vitest-coverage-report-action@v2

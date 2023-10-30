@@ -1,4 +1,3 @@
-import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as awsx from "@pulumi/awsx";
 
@@ -24,14 +23,27 @@ export const vpcPublicSubnetIds = vpc.publicSubnetIds;
  * - Pelican microservice (listen for changes from Postgres)
  * - Emu microservice (perform embeddings and upserts to Pinecone)
  */
-const frontendRepo = new aws.ecr.Repository("frontend");
-const pelicanRepo = new aws.ecr.Repository("pelican");
-const emuRepo = new aws.ecr.Repository("emu");
+const frontendRepo = new awsx.ecr.Repository("frontend");
+const pelicanRepo = new awsx.ecr.Repository("pelican");
+const emuRepo = new awsx.ecr.Repository("emu");
 
-// Directly use the repository's registryId property to get registry details
-const frontendRegistryId = frontendRepo.registryId
-const pelicanRegistryId = pelicanRepo.registryId
-const emuRegistryId = emuRepo.registryId
+/**
+ * Docker image builds
+ */
+const frontendImage = new awsx.ecr.Image("frontendImage", {
+  repositoryUrl: frontendRepo.url,
+  path: "./semantic-search-postgres"
+})
+
+const pelicanImage = new awsx.ecr.Image("pelicanImage", {
+  repositoryUrl: pelicanRepo.url,
+  path: "./pelican"
+})
+
+const emuImage = new awsx.ecr.Image("emuImage", {
+  repositoryUrl: emuRepo.url,
+  path: "./emu"
+})
 
 // Frontend UI ECS Service
 const frontendCluster = new awsx.classic.ecs.Cluster("cluster", {
@@ -111,7 +123,7 @@ const frontendService = new awsx.classic.ecs.FargateService("service", {
   desiredCount: 2,
   taskDefinitionArgs: {
     container: {
-      image: pulumi.interpolate`${frontendRepo.repositoryUrl}:latest`,
+      image: frontendImage.imageUri,
       cpu: 512,
       memory: 128,
       essential: true,
@@ -141,7 +153,7 @@ const pelicanService = new awsx.classic.ecs.FargateService("pelican-service", {
   desiredCount: 2,
   taskDefinitionArgs: {
     container: {
-      image: pulumi.interpolate`${pelicanRepo.repositoryUrl}:latest`,
+      image: pelicanImage.imageUri,
       cpu: 512,
       memory: 128,
       essential: true,
@@ -173,7 +185,7 @@ const emuService = new awsx.classic.ecs.FargateService("emu-service", {
   desiredCount: 2,
   taskDefinitionArgs: {
     container: {
-      image: pulumi.interpolate`${emuRepo.repositoryUrl}:latest`,
+      image: emuImage.imageUri,
       cpu: 512,
       memory: 128,
       essential: true,
@@ -230,8 +242,3 @@ export const emuServiceUrn = emuService.urn
 export const bucketName = bucket.id;
 export const deadLetterQueueId = deadletterQueue.id
 export const jobQueueId = jobQueue.id
-// ECR Repositories
-export const repositoryUrl = frontendRepo.repositoryUrl;
-export const frontendEcrRegistryId = frontendRegistryId
-export const pelicanEcrRegistryId = pelicanRegistryId
-export const emuEcrRegistryId = emuRegistryId

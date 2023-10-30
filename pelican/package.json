@@ -1,0 +1,42 @@
+{
+  "name": "pelican",
+  "version": "1.0.0",
+  "description": "",
+  "keywords": [],
+  "license": "ISC",
+  "author": "",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsup src --format cjs,esm --dts",
+    "dev": "tsup src --watch --onSuccess 'pnpm start'",
+    "format": "prettier --write . && npx --yes sort-package-json",
+    "lint": "tsc && eslint src",
+    "release": "pnpm run build && changeset publish",
+    "start": "node dist/index.js",
+    "test": "vitest run --coverage --retry 5",
+    "update-version": "changeset"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.26.2",
+    "@typescript-eslint/eslint-plugin": "^6.4.0",
+    "@vitest/coverage-v8": "^0.34.2",
+    "eslint": "^8.47.0",
+    "eslint-config-prettier": "^9.0.0",
+    "prettier": "^3.0.2",
+    "tsup": "^7.2.0",
+    "typescript": "^5.1.6",
+    "vitest": "^0.34.2"
+  },
+  "engines": {
+    "node": "20.0.0",
+    "npm": "Please use pnpm 8.6.12",
+    "pnpm": "8.6.12",
+    "yarn": "Please use pnpm 8.6.12"
+  },
+  "dependencies": {
+    "@types/pg": "^8.10.7",
+    "cross-fetch": "^4.0.0",
+    "node-fetch": "^3.3.2",
+    "pg": "^8.11.3"
+  }
+}

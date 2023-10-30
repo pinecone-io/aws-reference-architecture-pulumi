@@ -1,0 +1,36 @@
+name: CI
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - "**"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      # Required to checkout the code
+      contents: read
+      # Required to put a comment into the pull-request
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup
+        uses: ./.github/actions/setup
+      - name: Prettier
+        run: npm run format
+      - name: Check for prettier changes
+        run: |
+          git diff --exit-code >/dev/null 2>&1
+          EXIT_CODE=$?
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "Prettier changes detected. Please run 'pnpm format' and commit the changes."
+            exit 1
+          fi
+      - name: ESLint
+        run: pnpm lint
+      - name: Build
+        run: pnpm build
+      - name: Run integration tests
+        uses: ./.github/actions/integrationTests
