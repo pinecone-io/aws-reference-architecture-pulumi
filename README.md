@@ -1,4 +1,6 @@
-# Pinecone Reference Architecture Init 
+# Pinecone AWS Reference Architecture with Pulumi
+
+![Pinecone AWS Reference Architecture](./docs/aws-ref-arch-pulumi.png)
 
 ## Overview
 

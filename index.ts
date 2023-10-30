@@ -1,35 +1,92 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as awsx from "@pulumi/awsx";
-import { VpcSubnetType } from "@pulumi/awsx/classic/ec2";
 
 // Context: see https://www.notion.so/AWS-Pinecone-Reference-Architecture-in-Pulumi-PRD-61245ccff1f040499b5e2417f92eee77
-
 
 /**
  * Networking
  */
 
 // Allocate a new VPC with the default settings:
-const vpc = new awsx.ec2.Vpc("custom");
+const vpc = new awsx.classic.ec2.Vpc("custom", {});
 
 // Export a few interesting fields to make them easy to use:
-export const vpcId = vpc.vpcId;
+export const vpcId = vpc.id;
 export const vpcPrivateSubnetIds = vpc.privateSubnetIds;
 export const vpcPublicSubnetIds = vpc.publicSubnetIds;
+
 /**
- * Frontend app Docker registry
+ * Elastic Container Registry (ECR) repositories
+ *
+ * We have one repo for each of: 
+ * - Frontend (the semantic-search-postgres app)
+ * - Pelican microservice (listen for changes from Postgres)
+ * - Emu microservice (perform embeddings and upserts to Pinecone)
  */
-const repo = new aws.ecr.Repository("frontend");
+const frontendRepo = new aws.ecr.Repository("frontend");
+const pelicanRepo = new aws.ecr.Repository("pelican");
+const emuRepo = new aws.ecr.Repository("emu");
 
 // Directly use the repository's registryId property to get registry details
-const registryId = repo.registryId
+const frontendRegistryId = frontendRepo.registryId
+const pelicanRegistryId = pelicanRepo.registryId
+const emuRegistryId = emuRepo.registryId
+
+// Frontend UI ECS Service
+const frontendCluster = new awsx.classic.ecs.Cluster("cluster", {
+  vpc,
+});
+
+/**
+* Backend - RDS Postgres database
+*/
+const targetDbPort = 5432;
+
+const dbSubnetGroup = new aws.rds.SubnetGroup("db-subnet-group", {
+  subnetIds: vpcPrivateSubnetIds,
+})
+
+// Configure the RDS security group to only accept traffic from the ECS service's security group
+const rdsSecurityGroup = new aws.ec2.SecurityGroup("rdsSecurityGroup", {
+  vpcId: vpc.vpc.id,
+  egress: [{
+    protocol: "-1",
+    fromPort: 0,
+    toPort: 0,
+    cidrBlocks: ["0.0.0.0/0"],
+  }],
+  ingress: [{
+    protocol: "tcp",
+    fromPort: targetDbPort,
+    toPort: targetDbPort,
+    securityGroups: frontendCluster.securityGroups.map(sg => sg.id),
+  }],
+});
+
+// Postgres database
+const db = new aws.rds.Instance("mydb", {
+  dbSubnetGroupName: dbSubnetGroup.name,
+  engine: "postgres",
+  engineVersion: "15.4",
+  instanceClass: "db.t3.micro",
+  allocatedStorage: 20,
+  storageType: "gp2",
+  username: process.env.POSTGRES_DB_USER,
+  password: process.env.POSTGRES_DB_PASSWORD,
+  parameterGroupName: "default.postgres15",
+  skipFinalSnapshot: true,
+  vpcSecurityGroupIds: [rdsSecurityGroup.id],
+  port: targetDbPort,
+});
+
+export const dbEndpoint = db.endpoint;
+export const dbPort = db.port
 
 /**
  * Frontend application ECS service and networking 
  */
-const frontendCluster = new awsx.classic.ecs.Cluster("cluster", {});
-const alb = new awsx.classic.lb.ApplicationLoadBalancer("lb", { external: true, securityGroups: frontendCluster.securityGroups });
+const alb = new awsx.classic.lb.ApplicationLoadBalancer("lb", { vpc, external: true, securityGroups: frontendCluster.securityGroups });
 
 const targetGroup = alb.createTargetGroup("frontend", {
   port: 3000,
@@ -43,6 +100,10 @@ const listener = alb.createListener("listener", {
   targetGroup: targetGroup,
 });
 
+const pelicanCluster = new awsx.classic.ecs.Cluster("pelicanCluster", {
+  vpc,
+});
+
 const frontendService = new awsx.classic.ecs.FargateService("service", {
   cluster: frontendCluster,
   subnets: vpcPublicSubnetIds,
@@ -50,7 +111,7 @@ const frontendService = new awsx.classic.ecs.FargateService("service", {
   desiredCount: 2,
   taskDefinitionArgs: {
     container: {
-      image: pulumi.interpolate`${repo.repositoryUrl}:latest`,
+      image: pulumi.interpolate`${frontendRepo.repositoryUrl}:latest`,
       cpu: 512,
       memory: 128,
       essential: true,
@@ -61,8 +122,9 @@ const frontendService = new awsx.classic.ecs.FargateService("service", {
         { name: "PINECONE_INDEX", value: process.env.PINECONE_INDEX as string },
         { name: "OPENAI_API_KEY", value: process.env.OPENAI_API_KEY as string },
         { name: "POSTGRES_DB_NAME", value: process.env.POSTGRES_DB_NAME as string },
-        { name: "POSTGRES_DB_HOST", value: process.env.POSTGRES_DB_HOST as string },
-        { name: "POSTGRES_DB_PORT", value: process.env.POSTGRES_DB_PORT as string },
+        // Pass in the hostname and port of the RDS Postgres instance so the frontend knows where to find it
+        { name: "POSTGRES_DB_HOST", value: dbEndpoint },
+        { name: "POSTGRES_DB_PORT", value: dbPort.toString() },
         { name: "POSTGRES_DB_USER", value: process.env.POSTGRES_DB_USER as string },
         { name: "POSTGRES_DB_PASSWORD", value: process.env.POSTGRES_DB_PASSWORD as string },
         { name: "CERTIFICATE_BASE64", value: process.env.CERTIFICATE_BASE64 as string },
@@ -71,57 +133,10 @@ const frontendService = new awsx.classic.ecs.FargateService("service", {
   },
 });
 
-/**
- * Backend - RDS Postrges database
- */
-
-// Configure the RDS security group to only accept traffic from the ECS service's security group
-const rdsSecurityGroup = new aws.ec2.SecurityGroup("rdsSecurityGroup", {
-  egress: [{
-    protocol: "-1",
-    fromPort: 0,
-    toPort: 0,
-    cidrBlocks: ["0.0.0.0/0"],
-  }],
-  ingress: [{
-    protocol: "tcp",
-    fromPort: 5432,
-    toPort: 5432,
-    securityGroups: frontendCluster.securityGroups.map(sg => sg.id), // Referencing ECS cluster's security groups
-  }],
-});
-
-const dbSubnetGroup = new aws.rds.SubnetGroup("db-subnet-group", {
-  subnetIds: vpcPrivateSubnetIds,
-})
-
-const db = new aws.rds.Instance("mydb", {
-  dbSubnetGroupName: dbSubnetGroup.name,
-  engine: "postgres",
-  engineVersion: "15.4",
-  instanceClass: "db.t3.micro",
-  allocatedStorage: 20,
-  storageType: "gp2",
-  username: process.env.POSTGRES_DB_USER,
-  password: process.env.POSTGRES_DB_PASSWORD,
-  parameterGroupName: "default.postgres15",
-  skipFinalSnapshot: true,
-  vpcSecurityGroupIds: [rdsSecurityGroup.id],
-});
-
-/**
- * Pelican app Docker registry
- */
-const pelicanRepo = new aws.ecr.Repository("pelican");
-
-// Directly use the repository's registryId property to get registry details
-const pelicanRegistryId = pelicanRepo.registryId
-
-// Pelican is the microservice that listens to Postgres for changes and forwards changed records to Emu
-const pelicanCluster = new awsx.classic.ecs.Cluster("pelican-cluster", {});
 const pelicanService = new awsx.classic.ecs.FargateService("pelican-service", {
   cluster: pelicanCluster,
   subnets: vpcPrivateSubnetIds,
+  securityGroups: [rdsSecurityGroup.id],
   assignPublicIp: false,
   desiredCount: 2,
   taskDefinitionArgs: {
@@ -132,12 +147,39 @@ const pelicanService = new awsx.classic.ecs.FargateService("pelican-service", {
       essential: true,
       environment: [
         { name: "POSTGRES_DB_NAME", value: process.env.POSTGRES_DB_NAME as string },
-        { name: "POSTGRES_DB_HOST", value: process.env.POSTGRES_DB_HOST as string },
-        { name: "POSTGRES_DB_PORT", value: process.env.POSTGRES_DB_PORT as string },
+        { name: "POSTGRES_DB_HOST", value: dbEndpoint },
+        { name: "POSTGRES_DB_PORT", value: dbPort.toString() },
         { name: "POSTGRES_DB_USER", value: process.env.POSTGRES_DB_USER as string },
         { name: "POSTGRES_DB_PASSWORD", value: process.env.POSTGRES_DB_PASSWORD as string },
         { name: "CERTIFICATE_BASE64", value: process.env.CERTIFICATE_BASE64 as string },
         { name: "EMU_ENDPOINT", value: process.env.EMU_ENDPOINT as string },
+      ],
+    },
+  },
+});
+
+/**
+ * EMU: the emu microservice handles embeddings and upserts to the Pinecone index
+ */
+const emuCluster = new awsx.classic.ecs.Cluster("emuCluster", {
+  vpc,
+});
+
+const emuService = new awsx.classic.ecs.FargateService("emu-service", {
+  cluster: emuCluster,
+  subnets: vpcPrivateSubnetIds,
+  securityGroups: [rdsSecurityGroup.id],
+  assignPublicIp: false,
+  desiredCount: 2,
+  taskDefinitionArgs: {
+    container: {
+      image: pulumi.interpolate`${emuRepo.repositoryUrl}:latest`,
+      cpu: 512,
+      memory: 128,
+      essential: true,
+      environment: [
+        { name: "PINECONE_INDEX", value: process.env.PINECONE_INDEX as string },
+        { name: "PINECONE_NAMESPACE", value: process.env.PINECONE_NAMESPACE as string },
       ],
     },
   },
@@ -176,16 +218,20 @@ const jobQueue = new aws.sqs.Queue("job-queue", {
  *
  * Whatever values are exported here will be output in pulumi's terminal output that displays following an update:
  */
-export const repositoryUrl = repo.repositoryUrl;
 
+// Networking
 export const frontendServiceUrl = alb.loadBalancer.dnsName;
+
+// Service URNs
 export const serviceUrn = frontendService.urn
 export const pelicanServiceUrn = pelicanService.urn
-
-export const dbEndpoint = db.endpoint;
+export const emuServiceUrn = emuService.urn
 
 export const bucketName = bucket.id;
 export const deadLetterQueueId = deadletterQueue.id
 export const jobQueueId = jobQueue.id
-export const ecrRegistryId = registryId
-export const pelicanEcrRegistryId = pelicanRegistryId 
+// ECR Repositories
+export const repositoryUrl = frontendRepo.repositoryUrl;
+export const frontendEcrRegistryId = frontendRegistryId
+export const pelicanEcrRegistryId = pelicanRegistryId
+export const emuEcrRegistryId = emuRegistryId
