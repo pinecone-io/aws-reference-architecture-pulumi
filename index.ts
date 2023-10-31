@@ -32,17 +32,48 @@ const emuRepo = new awsx.ecr.Repository("emu");
  */
 const frontendImage = new awsx.ecr.Image("frontendImage", {
   repositoryUrl: frontendRepo.url,
-  path: "./semantic-search-postgres"
+  path: "./semantic-search-postgres",
+  args: {
+    "PINECONE_API_KEY": `${process.env.PINECONE_API_KEY}`,
+    "PINECONE_ENVIRONMENT": `${process.env.PINECONE_ENVIRONMENT}`
+  },
+  env: {
+    "PINECONE_API_KEY": `${process.env.PINECONE_API_KEY}`,
+    "PINECONE_ENVIRONMENT": `${process.env.PINECONE_ENVIRONMENT}`,
+    "PINECONE_INDEX": `${process.env.PINECONE_INDEX}`,
+    "OPENAI_API_KEY": `${process.env.OPENAI_API_KEY}`,
+    "POSTGRES_DB_NAME": `${process.env.POSTGRES_DB_NAME}`,
+    "POSTGRES_DB_HOST": `${process.env.POSTGRES_DB_HOST}`,
+    "POSTGRES_DB_PORT": `${process.env.POSTGRES_DB_PORT}`,
+    "POSTGRES_DB_USER": `${process.env.POSTGRES_DB_USER}`,
+    "POSTGRES_DB_PASSWORD": `${process.env.POSTGRES_DB_PASSWORD}`,
+    "CERTIFICATE_BASE64": `${process.env.CERTIFICATE_BASE64}`
+  }
 })
 
 const pelicanImage = new awsx.ecr.Image("pelicanImage", {
   repositoryUrl: pelicanRepo.url,
-  path: "./pelican"
+  path: "./pelican",
+  env: {
+    "POSTGRES_DB_NAME": `${process.env.POSTGRES_DB_NAME}`,
+    "POSTGRES_DB_HOST": `${process.env.POSTGRES_DB_HOST}`,
+    "POSTGRES_DB_PORT": `${process.env.POSTGRES_DB_PORT}`,
+    "POSTGRES_DB_USER": `${process.env.POSTGRES_DB_USER}`,
+    "POSTGRES_DB_PASSWORD": `${process.env.POSTGRES_DB_PASSWORD}`,
+    "CERTIFICATE_BASE64": `${process.env.CERTIFICATE_BASE64}`,
+    "EMU_ENDPOINT": `${process.env.EMU_ENDPOINT}`
+  }
 })
 
 const emuImage = new awsx.ecr.Image("emuImage", {
   repositoryUrl: emuRepo.url,
-  path: "./emu"
+  path: "./emu",
+  env: {
+    "PINECONE_API_KEY": `${process.env.PINECONE_API_KEY}`,
+    "PINECONE_ENVIRONMENT": `${process.env.PINECONE_ENVIRONMENT}`,
+    "PINECONE_INDEX": `${process.env.PINECONE_INDEX}`,
+    "PINECONE_NAMESPACE": `${process.env.PINECONE_NAMESPACE}`
+  }
 })
 
 // Frontend UI ECS Service
