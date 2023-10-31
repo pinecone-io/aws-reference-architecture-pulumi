@@ -1,6 +1,6 @@
 /* eslint-disable no-undef */
 /* eslint-disable @typescript-eslint/no-var-requires */
-const { Embedder } = require("../dist/embedder.js")
+const { Embedder } = require("./embedder")
 const { parentPort} = require('node:worker_threads');
 require('onnxruntime-node');
 

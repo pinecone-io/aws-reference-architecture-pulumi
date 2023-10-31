@@ -12,7 +12,7 @@
     "format": "prettier --write . && npx --yes sort-package-json",
     "lint": "tsc && eslint src",
     "release": "pnpm run build && changeset publish",
-    "start": "node --trace-gc dist/index.js",
+    "start": "node dist/index.js",
     "start:dev": "node --expose-gc dist/index.js",
     "test": "vitest run --coverage --retry 5",
     "update-version": "changeset",
