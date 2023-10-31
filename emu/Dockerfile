@@ -1,9 +1,8 @@
 # Use an ARM64 compatible Node.js runtime as a parent image
-FROM arm64v8/node:20.0.0
+FROM node:20.0.0
 
 # Set the working directory to /app-backend
 WORKDIR /app
-
 
 # Install pnpm
 RUN npm install -g pnpm@8.6.12
