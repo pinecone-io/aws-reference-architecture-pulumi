@@ -30,6 +30,12 @@ const emuRepo = new awsx.ecr.Repository("emu");
 /**
  * Docker image builds
  */
+// The frontend image runs the semantic-search-postgres app 
+// which exposes a searchable table UI to users filled with products 
+// that can be edited. When a product is edited, the frontend app 
+// persists the change to the RDS Postgres instance running in the private
+// subnet. The pelican microservice listens to the RDS Postgres database for 
+// changes and places those changes on the SQS queue
 const frontendImage = new awsx.ecr.Image("frontendImage", {
   repositoryUrl: frontendRepo.url,
   path: "./semantic-search-postgres",
@@ -51,6 +57,11 @@ const frontendImage = new awsx.ecr.Image("frontendImage", {
   }
 })
 
+// The pelican microservice is concerned with listening for changes in the RDS Postgres
+// Database. The RDS Postgres database is configured with Postgres triggers as defined in 
+// the rds_postgres_schema.sql file in the root of this project
+// These triggers are run on table changes, leading to the old and 
+// new records being emitted, picked up by Pelican and placed on the SQS job queue
 const pelicanImage = new awsx.ecr.Image("pelicanImage", {
   repositoryUrl: pelicanRepo.url,
   path: "./pelican",
@@ -65,6 +76,9 @@ const pelicanImage = new awsx.ecr.Image("pelicanImage", {
   }
 })
 
+// Emu is the EMbedding and Upsert (Emu) service, which handles converting the 
+// changed records and product descriptions in to embeddings and upserting them 
+// into the Pinecone index. It runs as a separate ECS service in the private subnet
 const emuImage = new awsx.ecr.Image("emuImage", {
   repositoryUrl: emuRepo.url,
   path: "./emu",
@@ -77,6 +91,8 @@ const emuImage = new awsx.ecr.Image("emuImage", {
 })
 
 // Frontend UI ECS Service
+// This is the user-facing UI service, so it is avalable to the public internet 
+// and therefore runs in the public subnet
 const frontendCluster = new awsx.classic.ecs.Cluster("cluster", {
   vpc,
 });
@@ -90,7 +106,10 @@ const dbSubnetGroup = new aws.rds.SubnetGroup("db-subnet-group", {
   subnetIds: vpcPrivateSubnetIds,
 })
 
-// Configure the RDS security group to only accept traffic from the ECS service's security group
+// Configure the RDS security group to only accept traffic from the pelican ECS 
+// service's security group. This allows us to keep access to the RDS Postgres 
+// instance locked down - only the frontend UI and Pelican microservice can 
+// reach the database directly 
 const rdsSecurityGroup = new aws.ec2.SecurityGroup("rdsSecurityGroup", {
   vpcId: vpc.vpc.id,
   egress: [{
@@ -103,11 +122,16 @@ const rdsSecurityGroup = new aws.ec2.SecurityGroup("rdsSecurityGroup", {
     protocol: "tcp",
     fromPort: targetDbPort,
     toPort: targetDbPort,
+    // Grant the frontend UI's security group access to the RDS Postgres database
     securityGroups: frontendCluster.securityGroups.map(sg => sg.id),
   }],
 });
 
 // Postgres database
+// This RDS Postgres database stores product information and natural language descriptions
+// of each product. When a record is edited by the user on the frontend table UI, the 
+// record is updated in this Postgres instance, which then fires the notification triggers
+// which the Pelican microservice is listening for
 const db = new aws.rds.Instance("mydb", {
   dbSubnetGroupName: dbSubnetGroup.name,
   engine: "postgres",
