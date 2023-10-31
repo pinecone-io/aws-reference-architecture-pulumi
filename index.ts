@@ -1,4 +1,3 @@
-import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as awsx from "@pulumi/awsx";
 
@@ -24,14 +23,58 @@ export const vpcPublicSubnetIds = vpc.publicSubnetIds;
  * - Pelican microservice (listen for changes from Postgres)
  * - Emu microservice (perform embeddings and upserts to Pinecone)
  */
-const frontendRepo = new aws.ecr.Repository("frontend");
-const pelicanRepo = new aws.ecr.Repository("pelican");
-const emuRepo = new aws.ecr.Repository("emu");
+const frontendRepo = new awsx.ecr.Repository("frontend");
+const pelicanRepo = new awsx.ecr.Repository("pelican");
+const emuRepo = new awsx.ecr.Repository("emu");
 
-// Directly use the repository's registryId property to get registry details
-const frontendRegistryId = frontendRepo.registryId
-const pelicanRegistryId = pelicanRepo.registryId
-const emuRegistryId = emuRepo.registryId
+/**
+ * Docker image builds
+ */
+const frontendImage = new awsx.ecr.Image("frontendImage", {
+  repositoryUrl: frontendRepo.url,
+  path: "./semantic-search-postgres",
+  args: {
+    "PINECONE_API_KEY": `${process.env.PINECONE_API_KEY}`,
+    "PINECONE_ENVIRONMENT": `${process.env.PINECONE_ENVIRONMENT}`
+  },
+  env: {
+    "PINECONE_API_KEY": `${process.env.PINECONE_API_KEY}`,
+    "PINECONE_ENVIRONMENT": `${process.env.PINECONE_ENVIRONMENT}`,
+    "PINECONE_INDEX": `${process.env.PINECONE_INDEX}`,
+    "OPENAI_API_KEY": `${process.env.OPENAI_API_KEY}`,
+    "POSTGRES_DB_NAME": `${process.env.POSTGRES_DB_NAME}`,
+    "POSTGRES_DB_HOST": `${process.env.POSTGRES_DB_HOST}`,
+    "POSTGRES_DB_PORT": `${process.env.POSTGRES_DB_PORT}`,
+    "POSTGRES_DB_USER": `${process.env.POSTGRES_DB_USER}`,
+    "POSTGRES_DB_PASSWORD": `${process.env.POSTGRES_DB_PASSWORD}`,
+    "CERTIFICATE_BASE64": `${process.env.CERTIFICATE_BASE64}`
+  }
+})
+
+const pelicanImage = new awsx.ecr.Image("pelicanImage", {
+  repositoryUrl: pelicanRepo.url,
+  path: "./pelican",
+  env: {
+    "POSTGRES_DB_NAME": `${process.env.POSTGRES_DB_NAME}`,
+    "POSTGRES_DB_HOST": `${process.env.POSTGRES_DB_HOST}`,
+    "POSTGRES_DB_PORT": `${process.env.POSTGRES_DB_PORT}`,
+    "POSTGRES_DB_USER": `${process.env.POSTGRES_DB_USER}`,
+    "POSTGRES_DB_PASSWORD": `${process.env.POSTGRES_DB_PASSWORD}`,
+    "CERTIFICATE_BASE64": `${process.env.CERTIFICATE_BASE64}`,
+    "EMU_ENDPOINT": `${process.env.EMU_ENDPOINT}`
+  }
+})
+
+const emuImage = new awsx.ecr.Image("emuImage", {
+  repositoryUrl: emuRepo.url,
+  path: "./emu",
+  env: {
+    "PINECONE_API_KEY": `${process.env.PINECONE_API_KEY}`,
+    "PINECONE_ENVIRONMENT": `${process.env.PINECONE_ENVIRONMENT}`,
+    "PINECONE_INDEX": `${process.env.PINECONE_INDEX}`,
+    "PINECONE_NAMESPACE": `${process.env.PINECONE_NAMESPACE}`
+  }
+})
 
 // Frontend UI ECS Service
 const frontendCluster = new awsx.classic.ecs.Cluster("cluster", {
@@ -111,7 +154,7 @@ const frontendService = new awsx.classic.ecs.FargateService("service", {
   desiredCount: 2,
   taskDefinitionArgs: {
     container: {
-      image: pulumi.interpolate`${frontendRepo.repositoryUrl}:latest`,
+      image: frontendImage.imageUri,
       cpu: 512,
       memory: 128,
       essential: true,
@@ -141,7 +184,7 @@ const pelicanService = new awsx.classic.ecs.FargateService("pelican-service", {
   desiredCount: 2,
   taskDefinitionArgs: {
     container: {
-      image: pulumi.interpolate`${pelicanRepo.repositoryUrl}:latest`,
+      image: pelicanImage.imageUri,
       cpu: 512,
       memory: 128,
       essential: true,
@@ -173,7 +216,7 @@ const emuService = new awsx.classic.ecs.FargateService("emu-service", {
   desiredCount: 2,
   taskDefinitionArgs: {
     container: {
-      image: pulumi.interpolate`${emuRepo.repositoryUrl}:latest`,
+      image: emuImage.imageUri,
       cpu: 512,
       memory: 128,
       essential: true,
@@ -230,8 +273,3 @@ export const emuServiceUrn = emuService.urn
 export const bucketName = bucket.id;
 export const deadLetterQueueId = deadletterQueue.id
 export const jobQueueId = jobQueue.id
-// ECR Repositories
-export const repositoryUrl = frontendRepo.repositoryUrl;
-export const frontendEcrRegistryId = frontendRegistryId
-export const pelicanEcrRegistryId = pelicanRegistryId
-export const emuEcrRegistryId = emuRegistryId
