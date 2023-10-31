@@ -156,7 +156,7 @@ const frontendService = new awsx.classic.ecs.FargateService("service", {
     container: {
       image: frontendImage.imageUri,
       cpu: 512,
-      memory: 128,
+      memory: 1024,
       essential: true,
       portMappings: [listener],
       environment: [
@@ -186,7 +186,7 @@ const pelicanService = new awsx.classic.ecs.FargateService("pelican-service", {
     container: {
       image: pelicanImage.imageUri,
       cpu: 512,
-      memory: 128,
+      memory: 1024,
       essential: true,
       environment: [
         { name: "POSTGRES_DB_NAME", value: process.env.POSTGRES_DB_NAME as string },
@@ -217,8 +217,8 @@ const emuService = new awsx.classic.ecs.FargateService("emu-service", {
   taskDefinitionArgs: {
     container: {
       image: emuImage.imageUri,
-      cpu: 512,
-      memory: 128,
+      cpu: 4096,
+      memory: 8192,
       essential: true,
       environment: [
         { name: "PINECONE_INDEX", value: process.env.PINECONE_INDEX as string },
