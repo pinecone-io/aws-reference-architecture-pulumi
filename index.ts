@@ -53,7 +53,6 @@ const frontendImage = new awsx.ecr.Image("frontendImage", {
     "POSTGRES_DB_PORT": `${process.env.POSTGRES_DB_PORT}`,
     "POSTGRES_DB_USER": `${process.env.POSTGRES_DB_USER}`,
     "POSTGRES_DB_PASSWORD": `${process.env.POSTGRES_DB_PASSWORD}`,
-    "CERTIFICATE_BASE64": `${process.env.CERTIFICATE_BASE64}`
   }
 })
 
@@ -71,8 +70,8 @@ const pelicanImage = new awsx.ecr.Image("pelicanImage", {
     "POSTGRES_DB_PORT": `${process.env.POSTGRES_DB_PORT}`,
     "POSTGRES_DB_USER": `${process.env.POSTGRES_DB_USER}`,
     "POSTGRES_DB_PASSWORD": `${process.env.POSTGRES_DB_PASSWORD}`,
-    "CERTIFICATE_BASE64": `${process.env.CERTIFICATE_BASE64}`,
-    "EMU_ENDPOINT": `${process.env.EMU_ENDPOINT}`
+    "AWS_REGION": `${process.env.AWS_REGION}` || 'us-east-1',
+    "SQS_QUEUE_URL": `${process.env.SQS_QUEUE_URL}`
   }
 })
 
@@ -82,6 +81,10 @@ const pelicanImage = new awsx.ecr.Image("pelicanImage", {
 const emuImage = new awsx.ecr.Image("emuImage", {
   repositoryUrl: emuRepo.url,
   path: "./emu",
+  args: {
+    "PINECONE_INDEX": `${process.env.PINECONE_INDEX}`,
+    "PINECONE_NAMESPACE": `${process.env.PINECONE_NAMESPACE}`
+  },
   env: {
     "PINECONE_API_KEY": `${process.env.PINECONE_API_KEY}`,
     "PINECONE_ENVIRONMENT": `${process.env.PINECONE_ENVIRONMENT}`,
@@ -142,7 +145,7 @@ const db = new aws.rds.Instance("mydb", {
   instanceClass: "db.t3.micro",
   allocatedStorage: 20,
   storageType: "gp2",
-  username: process.env.POSTGRES_DB_USER,
+  username: "postgres",
   password: process.env.POSTGRES_DB_PASSWORD,
   parameterGroupName: "default.postgres15",
   skipFinalSnapshot: true,
@@ -150,8 +153,11 @@ const db = new aws.rds.Instance("mydb", {
   port: targetDbPort,
 });
 
+export const dbName = db.name
 export const dbEndpoint = db.endpoint;
 export const dbPort = db.port
+export const dbUser = db.username
+export const dbPassword = db.password
 
 /**
  * Frontend application ECS service and networking 
@@ -191,13 +197,12 @@ const frontendService = new awsx.classic.ecs.FargateService("service", {
         { name: "PINECONE_ENVIRONMENT", value: process.env.PINECONE_ENVIRONMENT as string },
         { name: "PINECONE_INDEX", value: process.env.PINECONE_INDEX as string },
         { name: "OPENAI_API_KEY", value: process.env.OPENAI_API_KEY as string },
-        { name: "POSTGRES_DB_NAME", value: process.env.POSTGRES_DB_NAME as string },
+        { name: "POSTGRES_DB_NAME", value: dbName },
         // Pass in the hostname and port of the RDS Postgres instance so the frontend knows where to find it
         { name: "POSTGRES_DB_HOST", value: dbEndpoint },
         { name: "POSTGRES_DB_PORT", value: dbPort.toString() },
-        { name: "POSTGRES_DB_USER", value: process.env.POSTGRES_DB_USER as string },
-        { name: "POSTGRES_DB_PASSWORD", value: process.env.POSTGRES_DB_PASSWORD as string },
-        { name: "CERTIFICATE_BASE64", value: process.env.CERTIFICATE_BASE64 as string },
+        { name: "POSTGRES_DB_USER", value: dbUser },
+        { name: "POSTGRES_DB_PASSWORD", value: dbPassword.toString() },
       ],
     },
   },
@@ -219,10 +224,10 @@ const pelicanService = new awsx.classic.ecs.FargateService("pelican-service", {
         { name: "POSTGRES_DB_NAME", value: process.env.POSTGRES_DB_NAME as string },
         { name: "POSTGRES_DB_HOST", value: dbEndpoint },
         { name: "POSTGRES_DB_PORT", value: dbPort.toString() },
-        { name: "POSTGRES_DB_USER", value: process.env.POSTGRES_DB_USER as string },
-        { name: "POSTGRES_DB_PASSWORD", value: process.env.POSTGRES_DB_PASSWORD as string },
-        { name: "CERTIFICATE_BASE64", value: process.env.CERTIFICATE_BASE64 as string },
-        { name: "EMU_ENDPOINT", value: process.env.EMU_ENDPOINT as string },
+        { name: "POSTGRES_DB_USER", value: dbUser },
+        { name: "POSTGRES_DB_PASSWORD", value: dbPassword.toString() },
+        { name: "AWS_REGION", value: process.env.AWS_REGION ?? 'us-east-1' },
+        { name: "SQS_QUEUE_URL", value: process.env.SQS_QUEUE_URL || "" }
       ],
     },
   },
