@@ -159,6 +159,38 @@ export const dbPort = db.port
 export const dbUser = db.username
 export const dbPassword = db.password
 
+
+/**
+ * Supporting resources
+ */
+// Create an S3 bucket to store video frames
+const bucket = new aws.s3.Bucket("input-bucket");
+
+// Create an SQS queue to handle dead letters
+const deadletterQueue = new aws.sqs.Queue("dead-letter")
+
+// Create an SNS topic to handle dead letter notifications
+const deadLetterTopic = new aws.sns.Topic("failed-jobs")
+
+// Subscribe to the SNS Topic
+new aws.sns.TopicSubscription("dlQueueSubscription", {
+  topic: deadLetterTopic.arn,
+  protocol: "sqs",
+  endpoint: deadletterQueue.arn
+});
+
+// Create an SQS queue to handle jobs messages - and configure it to send its failed jobs to 
+// the dead letter queue
+const jobQueue = new aws.sqs.Queue("job-queue", {
+  redrivePolicy: deadletterQueue.arn.apply(arn => JSON.stringify({
+    deadLetterTargetArn: arn,
+    maxReceiveCount: 4,
+  }))
+});
+
+export const jobQueueId = jobQueue.id
+export const jobQueueUrl = jobQueue.url
+
 /**
  * Frontend application ECS service and networking 
  */
@@ -227,7 +259,7 @@ const pelicanService = new awsx.classic.ecs.FargateService("pelican-service", {
         { name: "POSTGRES_DB_USER", value: dbUser },
         { name: "POSTGRES_DB_PASSWORD", value: dbPassword.toString() },
         { name: "AWS_REGION", value: process.env.AWS_REGION ?? 'us-east-1' },
-        { name: "SQS_QUEUE_URL", value: process.env.SQS_QUEUE_URL || "" }
+        { name: "SQS_QUEUE_URL", value: jobQueueUrl }
       ],
     },
   },
@@ -259,35 +291,6 @@ const emuService = new awsx.classic.ecs.FargateService("emu-service", {
     },
   },
 });
-
-/**
- * Supporting resources
- */
-// Create an S3 bucket to store video frames
-const bucket = new aws.s3.Bucket("input-bucket");
-
-// Create an SQS queue to handle dead letters
-const deadletterQueue = new aws.sqs.Queue("dead-letter")
-
-// Create an SNS topic to handle dead letter notifications
-const deadLetterTopic = new aws.sns.Topic("failed-jobs")
-
-// Subscribe to the SNS Topic
-new aws.sns.TopicSubscription("dlQueueSubscription", {
-  topic: deadLetterTopic.arn,
-  protocol: "sqs",
-  endpoint: deadletterQueue.arn
-});
-
-// Create an SQS queue to handle jobs messages - and configure it to send its failed jobs to 
-// the dead letter queue
-const jobQueue = new aws.sqs.Queue("job-queue", {
-  redrivePolicy: deadletterQueue.arn.apply(arn => JSON.stringify({
-    deadLetterTargetArn: arn,
-    maxReceiveCount: 4,
-  }))
-});
-
 /**
  * Exports
  *
@@ -304,4 +307,3 @@ export const emuServiceUrn = emuService.urn
 
 export const bucketName = bucket.id;
 export const deadLetterQueueId = deadletterQueue.id
-export const jobQueueId = jobQueue.id
