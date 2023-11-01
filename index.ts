@@ -1,7 +1,13 @@
 import * as aws from "@pulumi/aws";
 import * as awsx from "@pulumi/awsx";
+import checkEnvVars from "./utils"
 
 // Context: see https://www.notion.so/AWS-Pinecone-Reference-Architecture-in-Pulumi-PRD-61245ccff1f040499b5e2417f92eee77
+//
+
+// Sanity check that all required environment variables are defined, and error 
+// out with a helpful message about which ones are unset if not
+checkEnvVars();
 
 /**
  * Networking
