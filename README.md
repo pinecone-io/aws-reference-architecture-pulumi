@@ -2,59 +2,15 @@
 
 ![Pinecone AWS Reference Architecture](./docs/aws-ref-arch-pulumi.png)
 
-## Overview
-
-This repo is the initial scratch repo for figuring out how to work with Pulumi and define the AWS archtitecture required to get Roie's 
-object search through video application stood up and working in a Production-ready manner. 
-
-## Proposed architecture 
-
-```mermaid
-graph TD;
-
-    subgraph Frontend
-        GitHub[GitHub Repo with Dockerfile]
-        ECS_Frontend[ECS Service]
-        Docker_Frontend[Docker Image with Frontend App]
-    end
-    
-    subgraph Backend
-        RDS[RDS Postgres Database]
-        Lambda[AWS Lambda]
-        SQS1[Jobs SQS Queue]
-        SQS2[Dead Letter SQS Queue]
-        SNS[SNS Topic for Dead Letter Alerts]
-    end
-    
-    subgraph Distributed Processing
-        ECS_Backend[ECS Cluster]
-        Docker1[Docker Worker 1]
-        Docker2[Docker Worker 2]
-        ...
-        DockerN[Docker Worker N]
-        OutputS3[Output S3 Bucket]
-    end
-    
-    GitHub --> ECS_Frontend --> Docker_Frontend --> RDS
-    RDS --> Lambda --> SQS1 --> ECS_Backend
-    ECS_Backend --> Docker1 --> OutputS3
-    ECS_Backend --> Docker2 --> OutputS3
-    ECS_Backend --> DockerN --> OutputS3
-    SQS2 --> SNS
-```
-
 ## Getting started: 
 
 ### Step 1. Install Pulumi 
 
-Follow their [setup instructions here](https://www.pulumi.com/docs/install/)
+Follow Pulumi's [setup instructions here](https://www.pulumi.com/docs/install/)
 
 ### Step 2. Get AWS access credentials
 
-You can either create your own AWS test account with a billing method you control and eventually expense back the charges, or you may 
-be able to obtain access to an AWS account already under Pinecone control.
-
-**DO NOT USE YOUR ROOT USER ACCOUNT FOR SCREWING AROUND WITH PULUMI OR ANYTHING ELSE**
+**DO NOT USE YOUR ROOT USER ACCOUNT FOR PULUMI OR ANYTHING ELSE**
 
 Create an IAM user, ideally named `pulumi`, and check the box to grant this IAM user AWS console permissions, and download the CSV file with the IAM user's credentials 
 when prompted. Alternatively, save the IAM user's login information in a password manager like BitWarden.
@@ -103,59 +59,25 @@ necessary to make the changes in your AWS account.
 Once we've figured out Roie's use case and have the infrastructure working properly, we'll generalize this into a generic starting point 
 that anyone can use to deploy their own Production-ready high-scale distributed system for creating embeddings and upserting them to Pinecone.
 
-## Docker instructions: frontend app
+## Apps
 
-Run the `./build-docker.sh` script in the [`semantic-search-postgres` repository](https://github.com/pinecone-io/semantic-search-postgres). 
+The Pinecone AWS Reference Architecture is comprised of three applications (one frontend UI app and two microservices) as well as the Pinecone index 
+and the AWS infrastructure to support these: 
 
-This script will detect any missing environment variables you still need to set by exporting them in your shell like so: 
+- semantic-search-postgres (user-facing UI application which enables semantic search over a table of products)
+- pelican (microservice that listens to the RDS Postgres instance for changes and puts changes on the SQS jobs queue)
+- emu (microservice that takes jobs off the SQS queue and embeds and upserts their contents into the Pinecone index)
 
-`export PINECONE_API_KEY=<your-api-key>`
+Each application has its own Dockerfile and README. Each README includes instructions on manually building the Docker image for that app in case 
+you wish to debug or explore the application locally.
 
-Once all required environment variables are set, the script will perform the docker build, passing the secrets via build args into the docker build.
+## Docker images 
 
-When the build completes, you'll have the frontend image built locally on your machine. You now need to get this image into the AWS ECR registry. 
+When you run `pulumi up`, Pulumi takes care of programmatically building the Docker images for each app and pushing them to their respective ECR container repository. 
 
-First, log into the registry via the `aws` CLI to retrieve an authentication token you can use for your subsequent Docker commands: 
+Pulumi handles authentication under the hood, so you do not need to manually authenticate to ECR repositories to push the Docker images.
 
-For example:
 
-`aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 675304494746.dkr.ecr.us-east-1.amazonaws.com`
+## Issues and contributions
 
-If you defined your aws credentials via the `~/.aws/credentials` file, you will need to pass the `--profile` flag like so: 
-
-`aws --profile pulumi ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 675304494746.dkr.ecr.us-east-1.amazonaws.com`
-
-If this command succeeds you'll get `Login succeeded!` in your terminal, meaning that subsequent Docker commands in your shell will use this authentication token 
-when communicating with the ECR registry.
-
-You then need to tag your local image that you just built via the `build-docker.sh` script as destined for the ECR registry, like so: 
-
-`docker tag semantic-app:latest 675304494746.dkr.ecr.us-east-1.amazonaws.com/frontend-c97ebf7:latest`
-
-Note that the ECR registry ID and aws region forming the the ECR tag will be specific to your AWS account. 
-
-You can now push your image via the full ECR tag like so: 
-
-`docker push 675304494746.dkr.ecr.us-east-1.amazonaws.com/frontend-c97ebf7:latest`
-
-You should see output referring to pushing Docker image layers to AWS ECR.
-
-You can log into the UI or aws the `aws` command line to ensure the image was successfully pushed. 
-
-## Roie’s Wishlist
-
-This is what we currently believe we're going to need to get Roie's video frame processing demo working end to end on AWS at scale:
-
-- N instances (workers)
-    - Embedding and upserting
-    - Workers run docker and pull images (possibly, there are tons of ways to do this)
-- ECR container registry
-    - Push images here
-- SQS or kinesis
-    - Dead letter queue for failure
-- SNS
-    - Monitoring and alerts
-    - Dead letter queue notifications to an email address most likely
-- S3
-    - Input bucket (storing frames)
-
+If you encounter any issues with the AWS Reference Architecture, please [file an issue against the repo](https://github.com/pinecone-io/ref-arch-init/issues/new).
