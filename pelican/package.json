@@ -16,6 +16,13 @@
     "test": "vitest run --coverage --retry 5",
     "update-version": "changeset"
   },
+  "dependencies": {
+    "@types/pg": "^8.10.7",
+    "aws-sdk": "^2.1485.0",
+    "cross-fetch": "^4.0.0",
+    "node-fetch": "^3.3.2",
+    "pg": "^8.11.3"
+  },
   "devDependencies": {
     "@changesets/cli": "^2.26.2",
     "@typescript-eslint/eslint-plugin": "^6.4.0",
@@ -32,11 +39,5 @@
     "npm": "Please use pnpm 8.6.12",
     "pnpm": "8.6.12",
     "yarn": "Please use pnpm 8.6.12"
-  },
-  "dependencies": {
-    "@types/pg": "^8.10.7",
-    "cross-fetch": "^4.0.0",
-    "node-fetch": "^3.3.2",
-    "pg": "^8.11.3"
   }
 }
