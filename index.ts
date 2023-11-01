@@ -160,10 +160,10 @@ const db = new aws.rds.Instance("mydb", {
 });
 
 export const dbName = db.name
-export const dbEndpoint = db.endpoint;
-export const dbPort = db.port
+export const dbAddress = db.address.apply(a => a);
+export const dbPort = db.port.apply(p => p)
 export const dbUser = db.username
-export const dbPassword = db.password
+export const dbPassword = db.password.apply(p => p)
 
 
 /**
@@ -235,12 +235,12 @@ const frontendService = new awsx.classic.ecs.FargateService("service", {
         { name: "PINECONE_ENVIRONMENT", value: process.env.PINECONE_ENVIRONMENT as string },
         { name: "PINECONE_INDEX", value: process.env.PINECONE_INDEX as string },
         { name: "OPENAI_API_KEY", value: process.env.OPENAI_API_KEY as string },
-        { name: "POSTGRES_DB_NAME", value: dbName },
+        { name: "POSTGRES_DB_NAME", value: dbName.apply(n => n) },
         // Pass in the hostname and port of the RDS Postgres instance so the frontend knows where to find it
-        { name: "POSTGRES_DB_HOST", value: dbEndpoint },
-        { name: "POSTGRES_DB_PORT", value: dbPort.toString() },
-        { name: "POSTGRES_DB_USER", value: dbUser },
-        { name: "POSTGRES_DB_PASSWORD", value: dbPassword.toString() },
+        { name: "POSTGRES_DB_HOST", value: dbAddress.apply(a => a) },
+        { name: "POSTGRES_DB_PORT", value: dbPort.apply(p => p.toString()) },
+        { name: "POSTGRES_DB_USER", value: dbUser.apply(u => u) },
+        { name: "POSTGRES_DB_PASSWORD", value: dbPassword.apply(p => p as unknown as string) },
       ],
     },
   },
@@ -260,10 +260,10 @@ const pelicanService = new awsx.classic.ecs.FargateService("pelican-service", {
       essential: true,
       environment: [
         { name: "POSTGRES_DB_NAME", value: process.env.POSTGRES_DB_NAME as string },
-        { name: "POSTGRES_DB_HOST", value: dbEndpoint },
-        { name: "POSTGRES_DB_PORT", value: dbPort.toString() },
-        { name: "POSTGRES_DB_USER", value: dbUser },
-        { name: "POSTGRES_DB_PASSWORD", value: dbPassword.toString() },
+        { name: "POSTGRES_DB_HOST", value: dbAddress.apply(a => a) },
+        { name: "POSTGRES_DB_PORT", value: targetDbPort.toString() },
+        { name: "POSTGRES_DB_USER", value: dbUser.apply(u => u) },
+        { name: "POSTGRES_DB_PASSWORD", value: dbPassword.apply(p => p as unknown as string) },
         { name: "AWS_REGION", value: process.env.AWS_REGION ?? 'us-east-1' },
         { name: "SQS_QUEUE_URL", value: jobQueueUrl }
       ],
