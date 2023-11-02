@@ -1,3 +1,4 @@
+import * as pulumi from "@pulumi/pulumi"
 import * as aws from "@pulumi/aws";
 import * as awsx from "@pulumi/awsx";
 import checkEnvVars from "./utils"
@@ -204,6 +205,40 @@ const jobQueue = new aws.sqs.Queue("job-queue", {
   }))
 });
 
+const sqsPolicy = new aws.iam.Policy("sqsPolicy", {
+  policy: pulumi.interpolate`{
+        "Version": "2012-10-17",
+        "Statement": [{
+            "Effect": "Allow",
+            "Action": [
+                "sqs:SendMessage",
+                "sqs:GetQueueUrl",
+                "sqs:GetQueueAttributes"
+            ],
+            "Resource": "${jobQueue.arn}"
+        }]
+    }`
+});
+
+const ecsTaskExecutionRole = new aws.iam.Role("ecsTaskExecutionRole", {
+  assumeRolePolicy: `{
+        "Version": "2012-10-17",
+        "Statement": [{
+            "Effect": "Allow",
+            "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+            },
+            "Action": "sts:AssumeRole"
+        }]
+    }`
+});
+
+new aws.iam.RolePolicyAttachment("sqsPolicyAttachment", {
+  role: ecsTaskExecutionRole.name,
+  policyArn: sqsPolicy.arn
+});
+
+
 export const jobQueueId = jobQueue.id
 export const jobQueueUrl = jobQueue.url
 
@@ -263,6 +298,7 @@ const pelicanService = new awsx.classic.ecs.FargateService("pelican-service", {
   assignPublicIp: false,
   desiredCount: 2,
   taskDefinitionArgs: {
+    taskRole: ecsTaskExecutionRole,
     container: {
       image: pelicanImage.imageUri,
       cpu: 512,
