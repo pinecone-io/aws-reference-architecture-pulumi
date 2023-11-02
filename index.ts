@@ -71,7 +71,7 @@ const pelicanImage = new awsx.ecr.Image("pelicanImage", {
   repositoryUrl: pelicanRepo.url,
   path: "./pelican",
   env: {
-    "POSTGRES_DB_NAME": `${process.env.POSTGRES_DB_NAME}`,
+    "POSTGRES_DB_NAME": `postgres`,
     "POSTGRES_DB_HOST": `${process.env.POSTGRES_DB_HOST}`,
     "POSTGRES_DB_PORT": `${process.env.POSTGRES_DB_PORT}`,
     "POSTGRES_DB_USER": `${process.env.POSTGRES_DB_USER}`,
@@ -115,6 +115,16 @@ const dbSubnetGroup = new aws.rds.SubnetGroup("db-subnet-group", {
   subnetIds: vpcPrivateSubnetIds,
 })
 
+const pelicanSecurityGroup = new aws.ec2.SecurityGroup("pelicanSecurityGroup", {
+  vpcId: vpc.vpc.id,
+  egress: [{
+    protocol: "-1",
+    fromPort: 0,
+    toPort: 0,
+    cidrBlocks: ["0.0.0.0/0"],
+  }],
+});
+
 // Configure the RDS security group to only accept traffic from the pelican ECS 
 // service's security group. This allows us to keep access to the RDS Postgres 
 // instance locked down - only the frontend UI and Pelican microservice can 
@@ -132,7 +142,7 @@ const rdsSecurityGroup = new aws.ec2.SecurityGroup("rdsSecurityGroup", {
     fromPort: targetDbPort,
     toPort: targetDbPort,
     // Grant the frontend UI's security group access to the RDS Postgres database
-    securityGroups: frontendCluster.securityGroups.map(sg => sg.id),
+    securityGroups: frontendCluster.securityGroups.map(sg => sg.id).concat(pelicanSecurityGroup.id.apply(i => i))
   }],
 });
 
@@ -249,7 +259,7 @@ const frontendService = new awsx.classic.ecs.FargateService("service", {
 const pelicanService = new awsx.classic.ecs.FargateService("pelican-service", {
   cluster: pelicanCluster,
   subnets: vpcPrivateSubnetIds,
-  securityGroups: [rdsSecurityGroup.id],
+  securityGroups: [pelicanSecurityGroup.id.apply(i => i)],
   assignPublicIp: false,
   desiredCount: 2,
   taskDefinitionArgs: {
@@ -259,7 +269,7 @@ const pelicanService = new awsx.classic.ecs.FargateService("pelican-service", {
       memory: 1024,
       essential: true,
       environment: [
-        { name: "POSTGRES_DB_NAME", value: process.env.POSTGRES_DB_NAME as string },
+        { name: "POSTGRES_DB_NAME", value: `postgres` },
         { name: "POSTGRES_DB_HOST", value: dbAddress.apply(a => a) },
         { name: "POSTGRES_DB_PORT", value: targetDbPort.toString() },
         { name: "POSTGRES_DB_USER", value: dbUser.apply(u => u) },
