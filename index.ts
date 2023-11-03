@@ -34,6 +34,9 @@ const frontendRepo = new awsx.ecr.Repository("frontend");
 const pelicanRepo = new awsx.ecr.Repository("pelican");
 const emuRepo = new awsx.ecr.Repository("emu");
 
+
+const targetDbPort = 5432;
+
 /**
  * Docker image builds
  */
@@ -46,6 +49,8 @@ const emuRepo = new awsx.ecr.Repository("emu");
 const frontendImage = new awsx.ecr.Image("frontendImage", {
   repositoryUrl: frontendRepo.url,
   path: "./semantic-search-postgres",
+  // These two values must be passed in as build-args, otherwise the call to `new Pinecone();`
+  // fails. They are also set as environment variables
   args: {
     "PINECONE_API_KEY": `${process.env.PINECONE_API_KEY}`,
     "PINECONE_ENVIRONMENT": `${process.env.PINECONE_ENVIRONMENT}`
@@ -55,9 +60,9 @@ const frontendImage = new awsx.ecr.Image("frontendImage", {
     "PINECONE_ENVIRONMENT": `${process.env.PINECONE_ENVIRONMENT}`,
     "PINECONE_INDEX": `${process.env.PINECONE_INDEX}`,
     "OPENAI_API_KEY": `${process.env.OPENAI_API_KEY}`,
-    "POSTGRES_DB_NAME": `${process.env.POSTGRES_DB_NAME}`,
+    "POSTGRES_DB_NAME": `postgres`,
     "POSTGRES_DB_HOST": `${process.env.POSTGRES_DB_HOST}`,
-    "POSTGRES_DB_PORT": `${process.env.POSTGRES_DB_PORT}`,
+    "POSTGRES_DB_PORT": targetDbPort.toString(),
     "POSTGRES_DB_USER": `${process.env.POSTGRES_DB_USER}`,
     "POSTGRES_DB_PASSWORD": `${process.env.POSTGRES_DB_PASSWORD}`,
   }
@@ -74,8 +79,8 @@ const pelicanImage = new awsx.ecr.Image("pelicanImage", {
   env: {
     "POSTGRES_DB_NAME": `postgres`,
     "POSTGRES_DB_HOST": `${process.env.POSTGRES_DB_HOST}`,
-    "POSTGRES_DB_PORT": `${process.env.POSTGRES_DB_PORT}`,
-    "POSTGRES_DB_USER": `${process.env.POSTGRES_DB_USER}`,
+    "POSTGRES_DB_PORT": targetDbPort.toString(),
+    "POSTGRES_DB_USER": `postgres`,
     "POSTGRES_DB_PASSWORD": `${process.env.POSTGRES_DB_PASSWORD}`,
     "AWS_REGION": `${process.env.AWS_REGION}` || 'us-east-1',
     "SQS_QUEUE_URL": `${process.env.SQS_QUEUE_URL}`
@@ -110,8 +115,6 @@ const frontendCluster = new awsx.classic.ecs.Cluster("cluster", {
 /**
 * Backend - RDS Postgres database
 */
-const targetDbPort = 5432;
-
 const dbSubnetGroup = new aws.rds.SubnetGroup("db-subnet-group", {
   subnetIds: vpcPrivateSubnetIds,
 })
@@ -125,6 +128,16 @@ const pelicanSecurityGroup = new aws.ec2.SecurityGroup("pelicanSecurityGroup", {
     cidrBlocks: ["0.0.0.0/0"],
   }],
 });
+
+const emuSecurityGroup = new aws.ec2.SecurityGroup("emuSecurityGroup", {
+  vpcId: vpc.vpc.id,
+  egress: [{
+    protocol: "-1",
+    fromPort: 0,
+    toPort: 0,
+    cidrBlocks: ["0.0.0.0/0"],
+  }],
+})
 
 // Configure the RDS security group to only accept traffic from the pelican ECS 
 // service's security group. This allows us to keep access to the RDS Postgres 
@@ -205,6 +218,7 @@ const jobQueue = new aws.sqs.Queue("job-queue", {
   }))
 });
 
+// SQS IAM Policy granting access to send messages and get queue URL and attributes
 const sqsPolicy = new aws.iam.Policy("sqsPolicy", {
   policy: pulumi.interpolate`{
         "Version": "2012-10-17",
@@ -327,7 +341,7 @@ const emuCluster = new awsx.classic.ecs.Cluster("emuCluster", {
 const emuService = new awsx.classic.ecs.FargateService("emu-service", {
   cluster: emuCluster,
   subnets: vpcPrivateSubnetIds,
-  securityGroups: [rdsSecurityGroup.id],
+  securityGroups: [emuSecurityGroup.id],
   assignPublicIp: false,
   desiredCount: 2,
   taskDefinitionArgs: {
@@ -339,6 +353,8 @@ const emuService = new awsx.classic.ecs.FargateService("emu-service", {
       environment: [
         { name: "PINECONE_INDEX", value: process.env.PINECONE_INDEX as string },
         { name: "PINECONE_NAMESPACE", value: process.env.PINECONE_NAMESPACE as string },
+        { name: "AWS_REGION", value: process.env.AWS_REGION ?? "us-east-1" },
+        { name: "SQS_QUEUE_URL", value: process.env.SQS_QUEUE_URL as string }
       ],
     },
   },
