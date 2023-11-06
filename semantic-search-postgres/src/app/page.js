@@ -1,34 +1,26 @@
-"use client"
-import { useState, useEffect } from 'react';
+// Use client directive remains the same
+"use client";
+import { useState } from 'react';
 import DebouncedInput from './components/debouncedInput';
 import useFetchProducts from './hooks/useFetchProducts';
-import useUpdateDescription from './hooks/useUpdateDescription';  // New Hook
-
-type Product = {
-  name: string;
-  sku: string;
-  description: string;
-  price: number;
-};
+import useUpdateDescription from './hooks/useUpdateDescription';
 
 const App = () => {
-  const [searchTerm, setSearchTerm] = useState<string>('');
-
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const [editableRow, setEditableRow] = useState<number | null>(null);
-  const [newDescription, setNewDescription] = useState<string>('');
-
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [editableRow, setEditableRow] = useState(null);
+  const [newDescription, setNewDescription] = useState('');
 
   const { products, loading, updateLocalDescription } = useFetchProducts(searchTerm, currentPage);
-  const { updateDescription } = useUpdateDescription();  // New Hook
+  const { updateDescription } = useUpdateDescription();
 
-  const handleEditClick = (index: number, description: string) => {
+  const handleEditClick = (index, description) => {
     setEditableRow(index);
-    setNewDescription(description);  // Set the value of the input box to the current description
+    setNewDescription(description);
   };
 
-  const handleSaveClick = async (index: number, sku: string) => {
-    const updatedProduct: Product = await updateDescription(sku, newDescription);
+  const handleSaveClick = async (index, sku) => {
+    const updatedProduct = await updateDescription(sku, newDescription);
     if (updatedProduct) {
       updateLocalDescription(index, updatedProduct);
     }
@@ -78,7 +70,6 @@ const App = () => {
                       </div>
                     </>
                   )}
-
                 </td>
                 <td className="border p-2">{product.price}</td>
               </tr>
@@ -105,3 +96,4 @@ const App = () => {
 };
 
 export default App;
+

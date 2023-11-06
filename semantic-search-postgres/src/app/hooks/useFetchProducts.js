@@ -1,15 +1,8 @@
 "use client"
 import { useState, useEffect } from 'react';
 
-type Product = {
-  name: string;
-  sku: string;
-  description: string;
-  price: number;
-};
-
-const useFetchProducts = (searchTerm: string, currentPage: number) => {
-  const [products, setProducts] = useState<Product[]>([]);
+const useFetchProducts = (searchTerm, currentPage) => {
+  const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -24,7 +17,7 @@ const useFetchProducts = (searchTerm: string, currentPage: number) => {
           body: JSON.stringify({ searchTerm, currentPage }),
         });
         const data = await response.json();
-        console.log("data", data)
+        console.log("data", data);
         setProducts(data);
       } catch (error) {
         console.error('Error fetching products:', error);
@@ -35,9 +28,9 @@ const useFetchProducts = (searchTerm: string, currentPage: number) => {
     fetchData();
   }, [searchTerm, currentPage]);
 
-  const updateLocalDescription = (index: number, product: Product) => {
+  const updateLocalDescription = (index, product) => {
     const updatedProducts = [...products];
-    console.log('product', product)
+    console.log('product', product);
     updatedProducts[index].description = product.description;
     setProducts(updatedProducts);
   };
@@ -45,4 +38,5 @@ const useFetchProducts = (searchTerm: string, currentPage: number) => {
   return { products, loading, updateLocalDescription };
 };
 
-export default useFetchProducts
+export default useFetchProducts;
+
