@@ -48,14 +48,10 @@ const targetDbPort = 5432;
 // changes and places those changes on the SQS queue
 const frontendImage = new awsx.ecr.Image("frontendImage", {
   repositoryUrl: frontendRepo.url,
-  path: "./semantic-search-postgres",
+  context: "./semantic-search-postgres",
   // These two values must be passed in as build-args, otherwise the call to `new Pinecone();`
   // fails. They are also set as environment variables
   args: {
-    "PINECONE_API_KEY": `${process.env.PINECONE_API_KEY}`,
-    "PINECONE_ENVIRONMENT": `${process.env.PINECONE_ENVIRONMENT}`
-  },
-  env: {
     "PINECONE_API_KEY": `${process.env.PINECONE_API_KEY}`,
     "PINECONE_ENVIRONMENT": `${process.env.PINECONE_ENVIRONMENT}`,
     "PINECONE_INDEX": `${process.env.PINECONE_INDEX}`,
@@ -75,8 +71,8 @@ const frontendImage = new awsx.ecr.Image("frontendImage", {
 // new records being emitted, picked up by Pelican and placed on the SQS job queue
 const pelicanImage = new awsx.ecr.Image("pelicanImage", {
   repositoryUrl: pelicanRepo.url,
-  path: "./pelican",
-  env: {
+  context: "./pelican",
+  args: {
     "POSTGRES_DB_NAME": `postgres`,
     "POSTGRES_DB_HOST": `${process.env.POSTGRES_DB_HOST}`,
     "POSTGRES_DB_PORT": targetDbPort.toString(),
@@ -92,16 +88,12 @@ const pelicanImage = new awsx.ecr.Image("pelicanImage", {
 // into the Pinecone index. It runs as a separate ECS service in the private subnet
 const emuImage = new awsx.ecr.Image("emuImage", {
   repositoryUrl: emuRepo.url,
-  path: "./emu",
+  context: "./emu",
   args: {
     "PINECONE_INDEX": `${process.env.PINECONE_INDEX}`,
-    "PINECONE_NAMESPACE": `${process.env.PINECONE_NAMESPACE}`
-  },
-  env: {
+    "PINECONE_NAMESPACE": `${process.env.PINECONE_NAMESPACE}`,
     "PINECONE_API_KEY": `${process.env.PINECONE_API_KEY}`,
-    "PINECONE_ENVIRONMENT": `${process.env.PINECONE_ENVIRONMENT}`,
-    "PINECONE_INDEX": `${process.env.PINECONE_INDEX}`,
-    "PINECONE_NAMESPACE": `${process.env.PINECONE_NAMESPACE}`
+    "PINECONE_ENVIRONMENT": `${process.env.PINECONE_ENVIRONMENT}`
   }
 })
 
@@ -183,7 +175,7 @@ const db = new aws.rds.Instance("mydb", {
   port: targetDbPort,
 });
 
-export const dbName = db.name
+export const dbName = db.dbName
 export const dbAddress = db.address.apply(a => a);
 export const dbPort = db.port.apply(p => p)
 export const dbUser = db.username
