@@ -1,69 +1,86 @@
-# Install dependencies only when needed
-FROM node:lts-alpine AS deps
+# syntax=docker/dockerfile:1.4
 
-WORKDIR /opt/app
-COPY package.json ./
-RUN yarn install --frozen-lockfile
+# Adapted from https://github.com/vercel/next.js/blob/e60a1e747c3f521fc24dfd9ee2989e13afeb0a9b/examples/with-docker/Dockerfile
+# For more information, see https://nextjs.org/docs/pages/building-your-application/deploying#docker-image
+
+FROM node:18 AS base
+
+# Install dependencies only when needed
+FROM base AS deps
+WORKDIR /app
+
+# Install dependencies based on the preferred package manager
+COPY --link package.json yarn.lock* package-lock.json* pnpm-lock.yaml* ./
+RUN \
+  if [ -f yarn.lock ]; then yarn --frozen-lockfile; \
+  elif [ -f package-lock.json ]; then npm ci; \
+  elif [ -f pnpm-lock.yaml ]; then yarn global add pnpm && pnpm i --frozen-lockfile; \
+  else echo "Lockfile not found." && exit 1; \
+  fi
+
 
 # Rebuild the source code only when needed
-# This is where because may be the case that you would try
-# to build the app based on some `X_TAG` in my case (Git commit hash)
-# but the code hasn't changed.
-FROM node:lts-alpine AS builder
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps --link /app/node_modules ./node_modules
+COPY --link  . .
 
-# Accept the --build-arg values from the command line for setting the Pinecone 
-# API key and environment variables
-ARG PINECONE_API_KEY
-ARG PINECONE_ENVIRONMENT
+# Next.js collects completely anonymous telemetry data about general usage.
+# Learn more here: https://nextjs.org/telemetry
+# Uncomment the following line in case you want to disable telemetry during the build.
+# ENV NEXT_TELEMETRY_DISABLED 1
 
-# Re-set the ENV variables for the runtime stage
-ENV PINECONE_API_KEY=$PINECONE_API_KEY
-ENV PINECONE_ENVIRONMENT=$PINECONE_ENVIRONMENT
+# TODO: this is unfortunate, but it appears that if the PINECONE_API_KEY and PINECONE_ENVIRONMENT 
+# variables are not set here, then the app build (npm run build) will fail within the container
+# because our client expects these values to at least be present
+ARG PINECONE_API_KEY=""
+ARG PINECONE_ENVIRONMENT=""
 
-ENV NODE_ENV=production
-WORKDIR /opt/app
-COPY . .
-COPY --from=deps /opt/app/node_modules ./node_modules
-RUN yarn build
+RUN npm run build
+
+# If using yarn comment out above and use below instead
+# RUN yarn build
 
 # Production image, copy all the files and run next
-FROM node:lts-alpine AS runner
+FROM base AS runner
+WORKDIR /app
 
-# Accept the --build-arg values from the command line for setting the Pinecone 
-# API key and environment variables. 
+ENV PINECONE_API_KEY=""
+ENV PINECONE_ENVIRONMENT=""
+ENV PINECONE_INDEX="emu"
 
-#Yes, we need to do this for the PINECONE_API_KEY and PINECONE_ENVIRONMENT environment 
-# variables in both stages, because the prior build step will fail if the Pinecone client 
-# can't find the env vars it needs during instantiation
-ARG PINECONE_API_KEY
-ARG PINECONE_ENVIRONMENT
-ARG PINECONE_INDEX
-ARG OPENAI_API_KEY
-ARG POSTGRES_DB_NAME
-ARG POSTGRES_DB_HOST
-ARG POSTGRES_DB_PORT
-ARG POSTGRES_DB_USER
-ARG POSTGRES_DB_PASSWORD
-ARG CERTIFICATE_BASE64
+# Postgres DB env vars
+ENV POSTGRES_DB_NAME="postgres"
+ENV POSTGRES_DB_HOST="localhost"
+ENV POSTGRES_DB_PORT=5432
+ENV POSTGRES_DB_USER="postgres"
+ENV POSTGRES_DB_PASSWORD="password"
+ENV CERTIFICATE_BASE64=""
 
-# Re-set the PINECONE auth ENV variables for the runtime stage
-ENV PINECONE_API_KEY=$PINECONE_API_KEY
-ENV PINECONE_ENVIRONMENT=$PINECONE_ENVIRONMENT
-# Set the remaining environment variables required by the Next.js app at runtime
-ENV PINECONE_INDEX=$PINECONE_INDEX
-ENV OPENAI_API_KEY=$OPENAI_API_KEY
-ENV POSTGRES_DB_NAME=$POSTGRES_DB_NAME
-ENV POSTGRES_DB_HOST=$POSTGRES_DB_HOST
-ENV POSTGRES_DB_PORT=$POSTGRES_DB_PORT
-ENV POSTGRES_DB_USER=$POSTGRES_DB_USER
-ENV POSTGRES_DB_PASSWORD=$POSTGRES_DB_PASSWORD
-ENV CERTIFICATE_BASE64=$CERTIFICATE_BASE64
+ENV NODE_ENV production
+# Uncomment the following line in case you want to disable telemetry during runtime.
+# ENV NEXT_TELEMETRY_DISABLED 1
 
-ARG X_TAG
-WORKDIR /opt/app
-ENV NODE_ENV=production
-COPY --from=builder /opt/app/next.config.js ./
-COPY --from=builder /opt/app/public ./public
-COPY --from=builder /opt/app/.next ./.next
-COPY --from=builder /opt/app/node_modules ./node_modules
-CMD ["node_modules/.bin/next", "start"]
+RUN \
+  addgroup --system --gid 1001 nodejs; \
+  adduser --system --uid 1001 nextjs
+
+COPY --from=builder --link /app/public ./public
+
+# Automatically leverage output traces to reduce image size
+# https://nextjs.org/docs/advanced-features/output-file-tracing
+COPY --from=builder --link --chown=1001:1001 /app/.next/standalone ./
+COPY --from=builder --link --chown=1001:1001 /app/.next/static ./.next/static
+
+USER nextjs
+
+EXPOSE 3000
+
+ENV PORT 3000
+
+# Allow the running process to write model files to the cache folder.
+# NOTE: In practice, you would probably want to pre-download the model files to avoid having to download them on-the-fly.
+RUN mkdir -p /app/node_modules/@xenova/.cache/
+RUN chmod 777 -R /app/node_modules/@xenova/
+
+CMD ["node", "server.js"]
