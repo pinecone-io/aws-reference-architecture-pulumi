@@ -10,7 +10,7 @@ Recommend using a node version manager such as [`n`](https://github.com/tj/n).
 
 1. Ensure you've got `pnpm` installed. [Installation docs](https://pnpm.io/installation).
 
-1. Ensure you have the correct version of `pnpm` expected by `package.json`. 
+1. Ensure you have the correct version of `pnpm` expected by `package.json`.
 
 You can add the specific version requiured by emu by running `pnpm add -g pnpm@8.6.12`.
 
