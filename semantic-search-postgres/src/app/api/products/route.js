@@ -61,7 +61,6 @@ async function handler(req) {
   return NextResponse.json(products.rows);
 }
 
-// The export remains the same in JS
 export {
   handler as POST
 };
