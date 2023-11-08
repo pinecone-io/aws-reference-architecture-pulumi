@@ -93,7 +93,6 @@ const emuImage = new awsx.ecr.Image("emuImage", {
     "PINECONE_INDEX": `${process.env.PINECONE_INDEX}`,
     "PINECONE_API_KEY": `${process.env.PINECONE_API_KEY}`,
     "PINECONE_ENVIRONMENT": `${process.env.PINECONE_ENVIRONMENT}`,
-    "PINECONE_INDEX": `${process.env.PINECONE_INDEX}`,
     "PINECONE_NAMESPACE": `${process.env.PINECONE_NAMESPACE}`,
     "AWS_REGION": `${process.env.AWS_REGION}` || 'us-east-1',
     "SQS_QUEUE_URL": `${process.env.SQS_QUEUE_URL}`
@@ -247,13 +246,14 @@ new aws.iam.RolePolicyAttachment("sqsPolicyAttachment", {
   policyArn: sqsPolicy.arn
 });
 
-const sqsReadPolicy = new aws.iam.Policy("sqsReadPolicy", {
+const sqsReadAndDeletePolicy = new aws.iam.Policy("sqsReadAndDeletePolicy", {
   policy: pulumi.interpolate`{
         "Version": "2012-10-17",
         "Statement": [{
             "Effect": "Allow",
             "Action": [
                 "sqs:ReceiveMessage",
+                "sqs:DeleteMessage",
                 "sqs:GetQueueUrl",
                 "sqs:GetQueueAttributes"
             ],
@@ -275,9 +275,9 @@ const ecsEmuTaskExecutionRole = new aws.iam.Role("ecsEmuTaskExecutionRole", {
     }`
 });
 
-new aws.iam.RolePolicyAttachment("sqsReadPolicyAttachment", {
+new aws.iam.RolePolicyAttachment("sqsReadAndDeletePolicyAttachment", {
   role: ecsEmuTaskExecutionRole.name,
-  policyArn: sqsReadPolicy.arn
+  policyArn: sqsReadAndDeletePolicy.arn
 });
 
 export const jobQueueId = jobQueue.id
