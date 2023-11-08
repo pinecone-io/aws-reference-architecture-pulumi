@@ -56,7 +56,7 @@ async function handler(req) {
 
   const products = await pgClient.query(query);
 
-  console.log(products.rows);
+  //console.log(products.rows);
 
   return NextResponse.json(products.rows);
 }
