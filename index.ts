@@ -93,7 +93,6 @@ const emuImage = new awsx.ecr.Image("emuImage", {
     "PINECONE_INDEX": `${process.env.PINECONE_INDEX}`,
     "PINECONE_API_KEY": `${process.env.PINECONE_API_KEY}`,
     "PINECONE_ENVIRONMENT": `${process.env.PINECONE_ENVIRONMENT}`,
-    "PINECONE_NAMESPACE": `${process.env.PINECONE_NAMESPACE}`,
     "AWS_REGION": `${process.env.AWS_REGION}` || 'us-east-1',
     "SQS_QUEUE_URL": `${process.env.SQS_QUEUE_URL}`
   }
@@ -380,7 +379,6 @@ const emuService = new awsx.classic.ecs.FargateService("emu-service", {
       essential: true,
       environment: [
         { name: "PINECONE_INDEX", value: process.env.PINECONE_INDEX as string },
-        { name: "PINECONE_NAMESPACE", value: process.env.PINECONE_NAMESPACE as string },
         { name: "AWS_REGION", value: process.env.AWS_REGION ?? "us-east-1" },
         { name: "SQS_QUEUE_URL", value: jobQueueUrl }
       ],

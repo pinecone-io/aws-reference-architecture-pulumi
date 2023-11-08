@@ -35,7 +35,7 @@ const params: ReceiveMessageCommandInput = {
   MaxNumberOfMessages: 10,
   QueueUrl: queueURL,
   WaitTimeSeconds: 20,
-}
+};
 
 // Initialize retry count
 let retryCount = 0;
@@ -54,7 +54,9 @@ const deleteMessageFromQueue = async (receiptHandle: string): Promise<void> => {
   };
   const command = new DeleteMessageCommand(deleteParams);
   await client.send(command);
-  console.log(`Deleted message with receipt handle: ${receiptHandle} from SQS queue`)
+  console.log(
+    `Deleted message with receipt handle: ${receiptHandle} from SQS queue`,
+  );
 };
 
 const pollMessages = async () => {
@@ -66,7 +68,7 @@ const pollMessages = async () => {
       const inputs: EmbedderInput[] = []; // Explicitly type the array as EmbedderInput[]
 
       for (const message of Messages) {
-        console.log(`Received message: %o`, message)
+        console.log(`Received message: %o`, message);
         // Process message
 
         if (!message.Body) {
@@ -78,12 +80,15 @@ const pollMessages = async () => {
           const envelope = JSON.parse(message.Body);
           console.log("envelope: %o", envelope);
 
-          const payload = JSON.parse(envelope.payload)
-          console.log(`payload: %o`, payload)
+          const payload = JSON.parse(envelope.payload);
+          console.log(`payload: %o`, payload);
 
           // Ensure the payload has the expected structure before proceeding
           if (!payload.new || !payload.new.id || !payload.new.description) {
-            console.error(`Payload does not contain expected properties: `, payload);
+            console.error(
+              `Payload does not contain expected properties: `,
+              payload,
+            );
             continue;
           }
 
@@ -91,17 +96,26 @@ const pollMessages = async () => {
           inputs.push({
             id: payload.new.id.toString(),
             text: payload.new.description,
-            metadata: Object.entries(payload.new).reduce((meta, [key, value]) => {
-              if (value !== null && value !== undefined) {
-                const metadataValue: RecordMetadataValue = Array.isArray(value)
-                  ? value.filter((item): item is string => typeof item === "string")
-                  : typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+            metadata: Object.entries(payload.new).reduce(
+              (meta, [key, value]) => {
+                if (value !== null && value !== undefined) {
+                  const metadataValue: RecordMetadataValue = Array.isArray(
+                    value,
+                  )
+                    ? value.filter(
+                        (item): item is string => typeof item === "string",
+                      )
+                    : typeof value === "string" ||
+                      typeof value === "number" ||
+                      typeof value === "boolean"
                     ? value
                     : value.toString();
-                meta[key as keyof RecordMetadata] = metadataValue;
-              }
-              return meta;
-            }, {} as RecordMetadata),
+                  meta[key as keyof RecordMetadata] = metadataValue;
+                }
+                return meta;
+              },
+              {} as RecordMetadata,
+            ),
           });
 
           const mode = "serial";
@@ -113,14 +127,14 @@ const pollMessages = async () => {
           // Reset retryCount after successful processing
           retryCount = 0;
         } catch (jsonError) {
-          console.error("Error parsing message body:", message.Body, jsonError)
+          console.error("Error parsing message body:", message.Body, jsonError);
         }
       }
     }
 
     // Prevent an overly active loop if no messages were found
     if (!Messages || Messages.length === 0) {
-      console.log('No messages received, polling again in 1 second.');
+      console.log("No messages received, polling again in 1 second.");
       setTimeout(pollMessages, 1000); // Wait for 1 second before polling again
       return;
     }
@@ -136,4 +150,3 @@ const pollMessages = async () => {
 };
 
 pollMessages();
-

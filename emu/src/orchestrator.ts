@@ -13,10 +13,11 @@ import { printProgress } from "./progressBar";
 config();
 
 const indexName = process.env.PINECONE_INDEX;
-const namespace = process.env.PINECONE_NAMESPACE;
+// Use the default Pinecone namespace
+const namespace = "";
 
-if (!indexName || !namespace) {
-  throw new Error("PINECONE_INDEX and PINECONE_NAMESPACE must be set");
+if (!indexName) {
+  throw new Error("environment variable PINECONE_INDEX must be set");
 }
 
 const pinecone = new Pinecone();

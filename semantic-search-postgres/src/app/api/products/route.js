@@ -28,6 +28,10 @@ async function handler(req) {
   });
 
   const index = pinecone.index(indexName);
+  // Intentionally use the default namespace for Pinecone
+  // The Emu microservice correlatively upserts to the default namespace, 
+  // signified by ''
+  const namespace = index.namespace('')
 
   const classifier = await PipelineSingleton.getInstance();
 
@@ -36,15 +40,18 @@ async function handler(req) {
   console.log(`embeddedSearchTerm: %o`, embeddedSearchTerm)
   console.log(`embeddedSearchTerm.data: %o`, embeddedSearchTerm.data)
 
-  const result = await index.query({
+  const result = await namespace.query({
     vector: Array.from(embeddedSearchTerm.data),
     topK: 100,
     includeMetadata: true
   });
 
   console.log(`result: %o`, result);
+  console.log(`length of matches in Pinecone: ${result.matches.length}`)
 
   const ids = result ? result.matches?.map((match) => match.metadata?.id) : [];
+
+  console.log(`ids before query: ${ids}`)
 
   const query = `
     SELECT * FROM products_with_increment
