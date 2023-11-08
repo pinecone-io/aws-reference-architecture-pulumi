@@ -91,9 +91,12 @@ const emuImage = new awsx.ecr.Image("emuImage", {
   context: "./emu",
   args: {
     "PINECONE_INDEX": `${process.env.PINECONE_INDEX}`,
-    "PINECONE_NAMESPACE": `${process.env.PINECONE_NAMESPACE}`,
     "PINECONE_API_KEY": `${process.env.PINECONE_API_KEY}`,
-    "PINECONE_ENVIRONMENT": `${process.env.PINECONE_ENVIRONMENT}`
+    "PINECONE_ENVIRONMENT": `${process.env.PINECONE_ENVIRONMENT}`,
+    "PINECONE_INDEX": `${process.env.PINECONE_INDEX}`,
+    "PINECONE_NAMESPACE": `${process.env.PINECONE_NAMESPACE}`,
+    "AWS_REGION": `${process.env.AWS_REGION}` || 'us-east-1',
+    "SQS_QUEUE_URL": `${process.env.SQS_QUEUE_URL}`
   }
 })
 
@@ -244,6 +247,38 @@ new aws.iam.RolePolicyAttachment("sqsPolicyAttachment", {
   policyArn: sqsPolicy.arn
 });
 
+const sqsReadPolicy = new aws.iam.Policy("sqsReadPolicy", {
+  policy: pulumi.interpolate`{
+        "Version": "2012-10-17",
+        "Statement": [{
+            "Effect": "Allow",
+            "Action": [
+                "sqs:ReceiveMessage",
+                "sqs:GetQueueUrl",
+                "sqs:GetQueueAttributes"
+            ],
+            "Resource": "${jobQueue.arn}"
+        }]
+    }`
+});
+
+const ecsEmuTaskExecutionRole = new aws.iam.Role("ecsEmuTaskExecutionRole", {
+  assumeRolePolicy: `{
+        "Version": "2012-10-17",
+        "Statement": [{
+            "Effect": "Allow",
+            "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+            },
+            "Action": "sts:AssumeRole"
+        }]
+    }`
+});
+
+new aws.iam.RolePolicyAttachment("sqsReadPolicyAttachment", {
+  role: ecsEmuTaskExecutionRole.name,
+  policyArn: sqsReadPolicy.arn
+});
 
 export const jobQueueId = jobQueue.id
 export const jobQueueUrl = jobQueue.url
@@ -337,6 +372,7 @@ const emuService = new awsx.classic.ecs.FargateService("emu-service", {
   assignPublicIp: false,
   desiredCount: 2,
   taskDefinitionArgs: {
+    taskRole: ecsEmuTaskExecutionRole,
     container: {
       image: emuImage.imageUri,
       cpu: 4096,
@@ -346,7 +382,7 @@ const emuService = new awsx.classic.ecs.FargateService("emu-service", {
         { name: "PINECONE_INDEX", value: process.env.PINECONE_INDEX as string },
         { name: "PINECONE_NAMESPACE", value: process.env.PINECONE_NAMESPACE as string },
         { name: "AWS_REGION", value: process.env.AWS_REGION ?? "us-east-1" },
-        { name: "SQS_QUEUE_URL", value: process.env.SQS_QUEUE_URL as string }
+        { name: "SQS_QUEUE_URL", value: jobQueueUrl }
       ],
     },
   },

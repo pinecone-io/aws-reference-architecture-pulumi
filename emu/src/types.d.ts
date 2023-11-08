@@ -1,4 +1,4 @@
 type Metadata = {
-    title: string
-    url: string
-}
+  title: string;
+  url: string;
+};
