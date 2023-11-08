@@ -11,7 +11,8 @@ const limit = 10;
 
 async function handler(req) {
   const { searchTerm, currentPage } = await req.json();
-  console.log(searchTerm, currentPage);
+
+  console.log(`searchTerm: ${searchTerm}, currentPage: ${currentPage}`);
 
   const offset = currentPage > 1 ? (currentPage - 1) * limit : 0;
 
@@ -33,7 +34,6 @@ async function handler(req) {
   const embeddedSearchTerm = await classifier(searchTerm, { pooling: 'mean', normalize: true })
 
   console.log(`embeddedSearchTerm: %o`, embeddedSearchTerm)
-
   console.log(`embeddedSearchTerm.data: %o`, embeddedSearchTerm.data)
 
   const result = await index.query({
