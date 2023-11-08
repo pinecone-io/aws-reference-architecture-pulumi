@@ -246,13 +246,14 @@ new aws.iam.RolePolicyAttachment("sqsPolicyAttachment", {
   policyArn: sqsPolicy.arn
 });
 
-const sqsReadPolicy = new aws.iam.Policy("sqsReadPolicy", {
+const sqsReadAndDeletePolicy = new aws.iam.Policy("sqsReadAndDeletePolicy", {
   policy: pulumi.interpolate`{
         "Version": "2012-10-17",
         "Statement": [{
             "Effect": "Allow",
             "Action": [
                 "sqs:ReceiveMessage",
+                "sqs:DeleteMessage",
                 "sqs:GetQueueUrl",
                 "sqs:GetQueueAttributes"
             ],
@@ -274,9 +275,9 @@ const ecsEmuTaskExecutionRole = new aws.iam.Role("ecsEmuTaskExecutionRole", {
     }`
 });
 
-new aws.iam.RolePolicyAttachment("sqsReadPolicyAttachment", {
+new aws.iam.RolePolicyAttachment("sqsReadAndDeletePolicyAttachment", {
   role: ecsEmuTaskExecutionRole.name,
-  policyArn: sqsReadPolicy.arn
+  policyArn: sqsReadAndDeletePolicy.arn
 });
 
 export const jobQueueId = jobQueue.id
