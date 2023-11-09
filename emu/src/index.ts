@@ -80,8 +80,9 @@ const pollMessages = async () => {
           const envelope = JSON.parse(message.Body);
           console.log("envelope: %o", envelope);
 
-          const payload = JSON.parse(envelope.payload);
+          const payload = envelope.payload
           console.log(`payload: %o`, payload);
+          console.log(`typeof payload: ${typeof payload}`)
 
           // Ensure the payload has the expected structure before proceeding
           if (!payload.new || !payload.new.id || !payload.new.description) {
@@ -103,13 +104,13 @@ const pollMessages = async () => {
                     value,
                   )
                     ? value.filter(
-                        (item): item is string => typeof item === "string",
-                      )
+                      (item): item is string => typeof item === "string",
+                    )
                     : typeof value === "string" ||
                       typeof value === "number" ||
                       typeof value === "boolean"
-                    ? value
-                    : value.toString();
+                      ? value
+                      : value.toString();
                   meta[key as keyof RecordMetadata] = metadataValue;
                 }
                 return meta;

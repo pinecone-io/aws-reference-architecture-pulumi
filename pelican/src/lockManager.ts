@@ -1,32 +1,36 @@
-import { query } from './dbClient';
+import { query } from "./dbClient";
+
+async function acquireLock(): Promise<boolean> {
+  const insertResult = await query(
+    `INSERT INTO locks (lock_name, initialized)
+    VALUES ($1, $2)
+    ON CONFLICT (lock_name) DO NOTHING`,
+    ["pelican-init-lock", false],
+  );
+
+  // Check if a row was inserted
+  return insertResult.rowCount > 0;
+}
+
+async function releaseLock(): Promise<void> {
+  await query("UPDATE locks SET initialized = $1 WHERE lock_name = $2", [
+    true,
+    "pelican-init-lock",
+  ]);
+}
 
 async function checkInitializationStatus(): Promise<boolean> {
-  try {
-    const result = await query(
-      'SELECT initialized FROM locks WHERE lock_name = $1',
-      ['pelican-init-lock']
-    );
+  const result = await query(
+    "SELECT initialized FROM locks WHERE lock_name = $1",
+    ["pelican-init-lock"],
+  );
 
-    if (result.rows.length > 0 && result.rows[0].initialized === true) {
-      return true; // Initialization has already been completed
-    }
-
-    return false; // Initialization is needed
-  } catch (error) {
-    console.error('Error checking initialization status:', error);
+  if (result.rows.length > 0) {
+    return result.rows[0].initialized;
+  } else {
+    // No lock record found, proceed to try and acquire lock
     return false;
   }
 }
 
-async function setInitializationStatus(initialized: boolean): Promise<void> {
-  try {
-    await query(
-      'UPDATE locks SET initialized = $1 WHERE lock_name = $2',
-      [initialized, 'pelican-init-lock']
-    );
-  } catch (error) {
-    console.error('Error setting initialization status:', error);
-  }
-}
-
-export { checkInitializationStatus, setInitializationStatus };
+export { acquireLock, releaseLock, checkInitializationStatus };

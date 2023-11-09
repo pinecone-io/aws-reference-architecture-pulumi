@@ -1,11 +1,15 @@
-import { Notification } from 'pg';
+import { Notification } from "pg";
 import process from "process";
 import { SQS } from "aws-sdk";
 import checkEnvVars from "./utils";
-import { checkInitializationStatus, setInitializationStatus } from './lockManager';
+import {
+  acquireLock,
+  releaseLock,
+  checkInitializationStatus,
+} from "./lockManager";
 import { fetchAndSendRecordsToSQS } from "./sqsHelper";
-import { getClient } from './dbClient';
-import { type PoolClient } from 'pg';
+import { getClient } from "./dbClient";
+import { type PoolClient } from "pg";
 
 const sqs = new SQS({ region: process.env.AWS_REGION });
 
@@ -14,21 +18,30 @@ let listenClient: PoolClient | null = null;
 // Ensure all required environment variables are set before starting up
 checkEnvVars();
 
-
 async function connectToDatabase() {
   try {
-    console.log("Pelican: Database connected successfully. Listening for changes...");
+    console.log(
+      "Pelican: Database connected successfully. Listening for changes...",
+    );
 
-    // Check if initialization is needed
-    const shouldInitialize = !(await checkInitializationStatus());
+    const isInitialized = await checkInitializationStatus();
 
-    if (shouldInitialize) {
-      await fetchAndSendRecordsToSQS();
-      await setInitializationStatus(true);
+    if (!isInitialized) {
+      const lockAcquired = await acquireLock();
+
+      if (lockAcquired) {
+        console.log("Lock acquired, running fetchAndSendRecordsToSQS...");
+        await fetchAndSendRecordsToSQS();
+        await releaseLock();
+        console.log("Initialization complete, lock released.");
+      } else {
+        console.log(
+          "Initialization is already in progress by another instance.",
+        );
+      }
     } else {
-      console.log(`Initialization has already been completed. Skipping.`)
+      console.log("Initialization has already been completed. Skipping.");
     }
-
     await listenForTableChanges();
   } catch (err: unknown) {
     handleDatabaseConnectionError(err);
@@ -42,11 +55,11 @@ async function listenForTableChanges() {
     listenClient = await getClient();
 
     // Set up notification handling on this client
-    listenClient.on('notification', handleNotification);
+    listenClient.on("notification", handleNotification);
 
     // Start listening to the 'table_change' channel
-    await listenClient.query('LISTEN table_change');
-    console.log('Listening for table changes...');
+    await listenClient.query("LISTEN table_change");
+    console.log("Listening for table changes...");
   } catch (error: unknown) {
     handleDatabaseConnectionError(error);
     // If there's an error, we disconnect the client and try to reconnect
@@ -59,16 +72,16 @@ async function listenForTableChanges() {
 
 function handleNotification(message: Notification) {
   try {
-    if (message.channel === 'table_change') {
+    if (message.channel === "table_change") {
       const payload = JSON.parse(message.payload as string);
-      console.log('Change detected:', payload);
+      console.log("Change detected:", payload);
       forwardMessageToQueue(payload);
     }
   } catch (error: unknown) {
     if (error instanceof Error) {
-      console.error('Error handling notification:', error.stack);
+      console.error("Error handling notification:", error.stack);
     } else {
-      console.error('An unexpected error occurred:', error);
+      console.error("An unexpected error occurred:", error);
     }
   }
 }
@@ -110,7 +123,9 @@ process.on("SIGINT", async () => {
   // Release the dedicated client for listening
   if (listenClient) {
     listenClient.release();
-    console.log('Released the dedicated client for listening to table changes.');
+    console.log(
+      "Released the dedicated client for listening to table changes.",
+    );
   }
   console.log("Database connection closed on app termination");
   process.exit();
