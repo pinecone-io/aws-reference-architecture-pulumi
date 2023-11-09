@@ -37,3 +37,15 @@ FOR EACH ROW EXECUTE FUNCTION notify_change();
 CREATE TRIGGER products_deleted
 AFTER DELETE ON public.products_with_increment
 FOR EACH ROW EXECUTE FUNCTION notify_change();
+
+-- Step 3: Create the 'locks' table for managing locks and initialization status
+CREATE TABLE IF NOT EXISTS locks (
+    id SERIAL PRIMARY KEY,
+    lock_name VARCHAR(255) UNIQUE NOT NULL,
+    lock_holder VARCHAR(255),
+    created_at TIMESTAMP DEFAULT NOW(),
+    initialized BOOLEAN DEFAULT FALSE -- initialization status column
+);
+
+-- Create an index on the 'lock_name' column for efficient lookups
+CREATE INDEX IF NOT EXISTS idx_lock_name ON locks (lock_name);

@@ -1,45 +1,34 @@
-import { Client, Notification } from "pg";
+import { Notification } from 'pg';
 import process from "process";
 import { SQS } from "aws-sdk";
 import checkEnvVars from "./utils";
+import { checkInitializationStatus, setInitializationStatus } from './lockManager';
+import { fetchAndSendRecordsToSQS } from "./sqsHelper";
+import { getClient } from './dbClient';
+import { type PoolClient } from 'pg';
 
-let client: Client;
 const sqs = new SQS({ region: process.env.AWS_REGION });
+
+let listenClient: PoolClient | null = null;
 
 // Ensure all required environment variables are set before starting up
 checkEnvVars();
 
+
 async function connectToDatabase() {
-  client = new Client({
-    user: process.env.POSTGRES_DB_USER,
-    host: process.env.POSTGRES_DB_HOST,
-    database: process.env.POSTGRES_DB_NAME,
-    password: process.env.POSTGRES_DB_PASSWORD,
-    port: Number(process.env.POSTGRES_DB_PORT),
-    ssl: {
-      rejectUnauthorized: false,
-    }
-  });
-
-  client.on("error", (err: Error) => {
-    console.error("Database connection error:", err.stack);
-    client.end();
-    reconnectToDatabase();
-  });
-
-  client.on("end", () => {
-    console.log("Database connection ended");
-    reconnectToDatabase();
-  });
-
   try {
-    await client.connect();
-    console.log(
-      "Pelican: Database connected successfully. Listening for changes...",
-    );
+    console.log("Pelican: Database connected successfully. Listening for changes...");
 
-    /* eslint-disable  @typescript-eslint/no-explicit-any */
-    (client as any).on("notification", handleNotification);
+    // Check if initialization is needed
+    const shouldInitialize = !(await checkInitializationStatus());
+
+    if (shouldInitialize) {
+      await fetchAndSendRecordsToSQS();
+      await setInitializationStatus(true);
+    } else {
+      console.log(`Initialization has already been completed. Skipping.`)
+    }
+
     await listenForTableChanges();
   } catch (err: unknown) {
     handleDatabaseConnectionError(err);
@@ -49,14 +38,38 @@ async function connectToDatabase() {
 
 async function listenForTableChanges() {
   try {
-    await client.query("LISTEN table_change");
+    // Get a dedicated client from the pool
+    listenClient = await getClient();
+
+    // Set up notification handling on this client
+    listenClient.on('notification', handleNotification);
+
+    // Start listening to the 'table_change' channel
+    await listenClient.query('LISTEN table_change');
+    console.log('Listening for table changes...');
   } catch (error: unknown) {
-    if (error instanceof Error) {
-      console.error("Error listening to table changes:", error.stack);
-    } else {
-      console.error("An unexpected error occurred:", error);
+    handleDatabaseConnectionError(error);
+    // If there's an error, we disconnect the client and try to reconnect
+    if (listenClient) {
+      listenClient.release();
     }
     reconnectToDatabase();
+  }
+}
+
+function handleNotification(message: Notification) {
+  try {
+    if (message.channel === 'table_change') {
+      const payload = JSON.parse(message.payload as string);
+      console.log('Change detected:', payload);
+      forwardMessageToQueue(payload);
+    }
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      console.error('Error handling notification:', error.stack);
+    } else {
+      console.error('An unexpected error occurred:', error);
+    }
   }
 }
 
@@ -65,23 +78,6 @@ function handleDatabaseConnectionError(err: unknown) {
     console.error("Failed to connect to database:", err.stack);
   } else {
     console.error("An unexpected error occurred:", err);
-  }
-}
-
-function handleNotification(message: Notification) {
-  try {
-    if (message.channel === "table_change") {
-      const payload = JSON.parse(message.payload as string);
-      console.log("Change detected:", payload);
-
-      forwardMessageToQueue(message);
-    }
-  } catch (error: unknown) {
-    if (error instanceof Error) {
-      console.error("Error handling notification:", error.stack);
-    } else {
-      console.error("An unexpected error occurred:", error);
-    }
   }
 }
 
@@ -111,7 +107,11 @@ async function forwardMessageToQueue(message: Notification) {
 
 // Gracefully handle app shutdown
 process.on("SIGINT", async () => {
-  await client.end();
+  // Release the dedicated client for listening
+  if (listenClient) {
+    listenClient.release();
+    console.log('Released the dedicated client for listening to table changes.');
+  }
   console.log("Database connection closed on app termination");
   process.exit();
 });
