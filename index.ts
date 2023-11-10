@@ -113,6 +113,12 @@ const frontendSecurityGroup = new aws.ec2.SecurityGroup("frontend-security-group
     toPort: 0,
     cidrBlocks: ["0.0.0.0/0"],
   }],
+  ingress: [{
+    protocol: "tcp",
+    fromPort: 80,
+    toPort: 80,
+    cidrBlocks: ["0.0.0.0/0"],
+  }],
 });
 
 /**
@@ -296,37 +302,55 @@ export const jobQueueUrl = jobQueue.url
  * Frontend application ECS service and networking 
  */
 const alb = new awsx.lb.ApplicationLoadBalancer("lb", {
-  vpc,
-  external: true,
-  securityGroups: frontendCluster.securityGroups
+  defaultTargetGroup: {
+    port: 3000,
+    protocol: "HTTP",
+    targetType: "ip"
+  },
+  internal: false,
+  listener: {
+    port: 80,
+    protocol: "HTTP",
+  },
+  securityGroups: [frontendSecurityGroup.id],
+  subnetIds: vpc.publicSubnetIds,
 });
 
-const targetGroup = alb.createTargetGroup("frontend", {
-  port: 3000,
-  targetType: "ip",
-  protocol: "HTTP",
-})
+// const targetGroup = alb.createTargetGroup("frontend", {
+//   port: 3000,
+//   targetType: "ip",
+//   protocol: "HTTP",
+// })
 
-// Create a Listener that listens on port 80 and forwards traffic to the new Target Group
-const listener = alb.createListener("listener", {
-  port: 80,
-  targetGroup: targetGroup,
-});
+// // Create a Listener that listens on port 80 and forwards traffic to the new Target Group
+// const listener = alb.createListener("listener", {
+//   port: 80,
+//   targetGroup: targetGroup,
+// });
 
 const pelicanCluster = new aws.ecs.Cluster("pelican-cluster", {});
 
 const frontendService = new awsx.ecs.FargateService("frontend-service", {
-  assignPublicIp: true,
   cluster: frontendCluster.arn,
   desiredCount: 2,
-  subnets: vpcPublicSubnetIds,
+  networkConfiguration: {
+    assignPublicIp: true,
+    securityGroups: [frontendSecurityGroup.id],
+    subnets: vpc.publicSubnetIds,
+  },
   taskDefinitionArgs: {
+    taskRole: {
+      roleArn: ecsTaskExecutionRole.arn,
+    },
     container: {
+      name: "frontend",
       image: frontendImage.imageUri,
       cpu: 512,
       memory: 1024,
       essential: true,
-      portMappings: [listener],
+      portMappings: [
+        { containerPort: 80, hostPort: 80 },
+      ],
       environment: [
         { name: "PINECONE_API_KEY", value: process.env.PINECONE_API_KEY as string },
         { name: "PINECONE_ENVIRONMENT", value: process.env.PINECONE_ENVIRONMENT as string },
@@ -344,14 +368,19 @@ const frontendService = new awsx.ecs.FargateService("frontend-service", {
 });
 
 const pelicanService = new awsx.ecs.FargateService("pelican-service", {
-  assignPublicIp: false,
   cluster: pelicanCluster.arn,
   desiredCount: 2,
-  securityGroups: [pelicanSecurityGroup.id],
-  subnets: vpcPrivateSubnetIds,
+  networkConfiguration: {
+    assignPublicIp: false,
+    securityGroups: [pelicanSecurityGroup.id],
+    subnets: vpc.privateSubnetIds,
+  },
   taskDefinitionArgs: {
-    taskRole: ecsTaskExecutionRole,
+    taskRole: {
+      roleArn: ecsTaskExecutionRole.arn,
+    },
     container: {
+      name: "pelican",
       image: pelicanImage.imageUri,
       cpu: 512,
       memory: 1024,
@@ -375,14 +404,19 @@ const pelicanService = new awsx.ecs.FargateService("pelican-service", {
 const emuCluster = new aws.ecs.Cluster("emu-cluster", {});
 
 const emuService = new awsx.ecs.FargateService("emu-service", {
-  assignPublicIp: false,
   cluster: emuCluster.arn,
   desiredCount: 2,
-  securityGroups: [emuSecurityGroup.id],
-  subnets: vpcPrivateSubnetIds,
+  networkConfiguration: {
+    assignPublicIp: false,
+    securityGroups: [emuSecurityGroup.id],
+    subnets: vpc.privateSubnetIds,
+  },
   taskDefinitionArgs: {
-    taskRole: ecsEmuTaskExecutionRole,
+    taskRole: {
+      roleArn: ecsTaskExecutionRole.arn,
+    },
     container: {
+      name: "emu",
       image: emuImage.imageUri,
       cpu: 4096,
       memory: 8192,
