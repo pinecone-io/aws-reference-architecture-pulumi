@@ -393,7 +393,7 @@ export const emuServiceName = emuService.service.name
 
 const emuResourceId = pulumi.interpolate`service/${emuClusterName}/${emuServiceName}`;
 
-const emuECSServiceTarget = new aws.appautoscaling.Target("emuECSServiceTarget", {
+const ecsTarget = new aws.appautoscaling.Target("ecsTarget", {
   maxCapacity: 8,
   minCapacity: 2,
   resourceId: emuResourceId,
@@ -401,122 +401,20 @@ const emuECSServiceTarget = new aws.appautoscaling.Target("emuECSServiceTarget",
   serviceNamespace: "ecs",
 });
 
-// Create scale up and scale down policies
-const scaleUpPolicy = new aws.appautoscaling.Policy("scaleUpPolicy", {
-  resourceId: emuResourceId,
-  scalableDimension: emuECSServiceTarget.scalableDimension,
-  serviceNamespace: emuECSServiceTarget.serviceNamespace,
+const cpuUtilizationPolicy = new aws.appautoscaling.Policy("cpuUtilizationPolicy", {
   policyType: "TargetTrackingScaling",
+  resourceId: ecsTarget.resourceId,
+  scalableDimension: ecsTarget.scalableDimension,
+  serviceNamespace: ecsTarget.serviceNamespace,
   targetTrackingScalingPolicyConfiguration: {
+    targetValue: 25, // Target CPU utilization percentage
+    predefinedMetricSpecification: {
+      predefinedMetricType: "ECSServiceAverageCPUUtilization",
+    },
     scaleInCooldown: 30,
     scaleOutCooldown: 30,
-    targetValue: 100,
-    customizedMetricSpecification: {
-      metrics: [
-        {
-          label: "Get the queue size (the number of messages waiting to be processed)",
-          id: "m1",
-          metricStat: {
-            metric: {
-              metricName: "ApproximateNumberOfMessagesVisible",
-              namespace: "AWS/SQS",
-              dimensions: [{
-                name: "QueueName",
-                value: jobQueue.name,
-              }],
-            },
-            stat: "Sum",
-          },
-          returnData: false,
-        },
-        {
-          label: "Get the ECS running task count (the number of currently running tasks)",
-          id: "m2",
-          metricStat: {
-            metric: {
-              metricName: "RunningTaskCount",
-              namespace: "ECS/ContainerInsights",
-              dimensions: [
-                {
-                  name: "ClusterName",
-                  value: emuClusterName,
-                },
-                {
-                  name: "ServiceName",
-                  value: emuServiceName,
-                },
-              ],
-            },
-            stat: "Average",
-          },
-          returnData: false,
-        },
-        {
-          label: "Number of SQS messages visible",
-          id: "e1",
-          expression: "m1 / m2",
-          returnData: true,
-        },
-      ],
-    },
-  }
-});
-
-const scaleDownPolicy = new aws.appautoscaling.Policy("scaleDownPolicy", {
-  resourceId: emuResourceId,
-  scalableDimension: "ecs:service:DesiredCount",
-  serviceNamespace: "ecs",
-  policyType: "StepScaling",
-  stepScalingPolicyConfiguration: {
-    adjustmentType: "ExactCapacity",
-    stepAdjustments: [{
-      scalingAdjustment: 2,
-      metricIntervalLowerBound: "0",
-    }],
-    cooldown: 30,
-    metricAggregationType: "Average"
   },
 });
-
-const scaleDownAlarm = new aws.cloudwatch.MetricAlarm("scaleDownAlarm", {
-  comparisonOperator: "LessThanOrEqualToThreshold",
-  evaluationPeriods: 1,
-  metricName: "ApproximateNumberOfMessagesVisible",
-  namespace: "AWS/SQS",
-  period: 30,
-  statistic: "Average",
-  threshold: 0,
-  dimensions: {
-    QueueName: jobQueue.name,
-  },
-  alarmActions: [scaleDownPolicy.arn],
-});
-
-const scaleUpAlarm = new aws.cloudwatch.MetricAlarm("scaleUpAlarm", {
-  comparisonOperator: "GreaterThanOrEqualToThreshold",
-  evaluationPeriods: 1,
-  threshold: 100, // Set to the appropriate threshold for scaling up
-  alarmDescription: "Alarm when the custom metric exceeds the threshold",
-  metricQueries: [
-    {
-      id: "m1",
-      returnData: true,
-      metric: {
-        namespace: "AWS/SQS",
-        metricName: "ApproximateNumberOfMessagesVisible",
-        period: 30,
-        stat: "Sum",
-        dimensions: {
-          QueueName: jobQueue.name,
-        }
-      },
-    },
-  ],
-  alarmActions: [scaleUpPolicy.arn],
-});
-
-export const scaleUpAlarmId = scaleUpAlarm.id;
-export const scaleDownAlarmId = scaleDownAlarm.id
 
 /**
  * Exports
