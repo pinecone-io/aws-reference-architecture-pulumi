@@ -182,7 +182,6 @@ export const dbPort = db.port.apply(p => p)
 export const dbUser = db.username
 export const dbPassword = db.password.apply(p => p)
 
-
 /**
  * Supporting resources
  */
@@ -385,6 +384,38 @@ const emuService = new awsx.classic.ecs.FargateService("emu-service", {
     },
   },
 });
+
+/**
+ * Emu autoscaling configuration
+ */
+export const emuClusterName = emuCluster.cluster.name
+export const emuServiceName = emuService.service.name
+
+const emuResourceId = pulumi.interpolate`service/${emuClusterName}/${emuServiceName}`;
+
+const ecsTarget = new aws.appautoscaling.Target("ecsTarget", {
+  maxCapacity: 8,
+  minCapacity: 2,
+  resourceId: emuResourceId,
+  scalableDimension: "ecs:service:DesiredCount",
+  serviceNamespace: "ecs",
+});
+
+const cpuUtilizationPolicy = new aws.appautoscaling.Policy("cpuUtilizationPolicy", {
+  policyType: "TargetTrackingScaling",
+  resourceId: ecsTarget.resourceId,
+  scalableDimension: ecsTarget.scalableDimension,
+  serviceNamespace: ecsTarget.serviceNamespace,
+  targetTrackingScalingPolicyConfiguration: {
+    targetValue: 25, // Target CPU utilization percentage
+    predefinedMetricSpecification: {
+      predefinedMetricType: "ECSServiceAverageCPUUtilization",
+    },
+    scaleInCooldown: 30,
+    scaleOutCooldown: 30,
+  },
+});
+
 /**
  * Exports
  *
