@@ -161,7 +161,7 @@ const rdsSecurityGroup = new aws.ec2.SecurityGroup("rdsSecurityGroup", {
 const db = new aws.rds.Instance("mydb", {
   // This RDS snapshot has the products_with_increment table already created and is populated with the data from 
   // data/products_no_ids.csv
-  snapshotIdentifier: "arn:aws:rds:us-east-1:675304494746:snapshot:pinecone-aws-ref-arch-postgres-db-snapshot",
+  snapshotIdentifier: "arn:aws:rds:us-east-1:675304494746:snapshot:pinecone-aws-refarch-postgres-snapshot-v2",
   dbSubnetGroupName: dbSubnetGroup.name,
   engine: "postgres",
   engineVersion: "15.4",
