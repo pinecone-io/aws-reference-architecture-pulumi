@@ -142,6 +142,7 @@ export const dbPassword = db.password.apply(p => p)
 // changes and places those changes on the SQS queue
 const frontendImage = new awsx.ecr.Image("frontend-image", {
   repositoryUrl: frontendRepo.url,
+  platform: "linux/amd64",
   context: "./semantic-search-postgres",
   // These two values must be passed in as build-args, otherwise the call to `new Pinecone();`
   // fails. They are also set as environment variables
@@ -164,6 +165,7 @@ const frontendImage = new awsx.ecr.Image("frontend-image", {
 // new records being emitted, picked up by Pelican and placed on the SQS job queue
 const pelicanImage = new awsx.ecr.Image("pelican-image", {
   repositoryUrl: pelicanRepo.url,
+  platform: "linux/amd64",
   context: "./pelican",
   args: {
     "POSTGRES_DB_NAME": `postgres`,
@@ -181,6 +183,7 @@ const pelicanImage = new awsx.ecr.Image("pelican-image", {
 // into the Pinecone index. It runs as a separate ECS service in the private subnet
 const emuImage = new awsx.ecr.Image("emu-image", {
   repositoryUrl: emuRepo.url,
+  platform: "linux/amd64",
   context: "./emu",
   args: {
     "PINECONE_INDEX": `${process.env.PINECONE_INDEX}`,
