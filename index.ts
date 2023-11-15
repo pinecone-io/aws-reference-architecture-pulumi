@@ -15,10 +15,10 @@ checkEnvVars();
  */
 
 // Allocate a new VPC with the default settings:
-const vpc = new awsx.classic.ec2.Vpc("custom", {});
+const vpc = new awsx.ec2.Vpc("custom", {});
 
 // Export a few interesting fields to make them easy to use:
-export const vpcId = vpc.id;
+export const vpcId = vpc.vpcId;
 export const vpcPrivateSubnetIds = vpc.privateSubnetIds;
 export const vpcPublicSubnetIds = vpc.publicSubnetIds;
 
@@ -46,7 +46,7 @@ const targetDbPort = 5432;
 // persists the change to the RDS Postgres instance running in the private
 // subnet. The pelican microservice listens to the RDS Postgres database for 
 // changes and places those changes on the SQS queue
-const frontendImage = new awsx.ecr.Image("frontendImage", {
+const frontendImage = new awsx.ecr.Image("frontend-image", {
   repositoryUrl: frontendRepo.url,
   context: "./semantic-search-postgres",
   // These two values must be passed in as build-args, otherwise the call to `new Pinecone();`
@@ -69,7 +69,7 @@ const frontendImage = new awsx.ecr.Image("frontendImage", {
 // the rds_postgres_schema.sql file in the root of this project
 // These triggers are run on table changes, leading to the old and 
 // new records being emitted, picked up by Pelican and placed on the SQS job queue
-const pelicanImage = new awsx.ecr.Image("pelicanImage", {
+const pelicanImage = new awsx.ecr.Image("pelican-image", {
   repositoryUrl: pelicanRepo.url,
   context: "./pelican",
   args: {
@@ -86,7 +86,7 @@ const pelicanImage = new awsx.ecr.Image("pelicanImage", {
 // Emu is the EMbedding and Upsert (Emu) service, which handles converting the 
 // changed records and product descriptions in to embeddings and upserting them 
 // into the Pinecone index. It runs as a separate ECS service in the private subnet
-const emuImage = new awsx.ecr.Image("emuImage", {
+const emuImage = new awsx.ecr.Image("emu-image", {
   repositoryUrl: emuRepo.url,
   context: "./emu",
   args: {
@@ -101,8 +101,23 @@ const emuImage = new awsx.ecr.Image("emuImage", {
 // Frontend UI ECS Service
 // This is the user-facing UI service, so it is avalable to the public internet 
 // and therefore runs in the public subnet
-const frontendCluster = new awsx.classic.ecs.Cluster("cluster", {
-  vpc,
+const frontendCluster = new aws.ecs.Cluster("frontend-cluster", {});
+
+// Create a frontend security group
+const frontendSecurityGroup = new aws.ec2.SecurityGroup("frontend-security-group", {
+  vpcId: vpc.vpcId,
+  egress: [{
+    protocol: "-1",
+    fromPort: 0,
+    toPort: 0,
+    cidrBlocks: ["0.0.0.0/0"],
+  }],
+  ingress: [{
+    protocol: "tcp",
+    fromPort: 80,
+    toPort: 80,
+    cidrBlocks: ["0.0.0.0/0"],
+  }],
 });
 
 /**
@@ -110,10 +125,10 @@ const frontendCluster = new awsx.classic.ecs.Cluster("cluster", {
 */
 const dbSubnetGroup = new aws.rds.SubnetGroup("db-subnet-group", {
   subnetIds: vpcPrivateSubnetIds,
-})
+});
 
-const pelicanSecurityGroup = new aws.ec2.SecurityGroup("pelicanSecurityGroup", {
-  vpcId: vpc.vpc.id,
+const pelicanSecurityGroup = new aws.ec2.SecurityGroup("pelican-security-group", {
+  vpcId: vpc.vpcId,
   egress: [{
     protocol: "-1",
     fromPort: 0,
@@ -122,8 +137,8 @@ const pelicanSecurityGroup = new aws.ec2.SecurityGroup("pelicanSecurityGroup", {
   }],
 });
 
-const emuSecurityGroup = new aws.ec2.SecurityGroup("emuSecurityGroup", {
-  vpcId: vpc.vpc.id,
+const emuSecurityGroup = new aws.ec2.SecurityGroup("emu-security-group", {
+  vpcId: vpc.vpcId,
   egress: [{
     protocol: "-1",
     fromPort: 0,
@@ -136,8 +151,8 @@ const emuSecurityGroup = new aws.ec2.SecurityGroup("emuSecurityGroup", {
 // service's security group. This allows us to keep access to the RDS Postgres 
 // instance locked down - only the frontend UI and Pelican microservice can 
 // reach the database directly 
-const rdsSecurityGroup = new aws.ec2.SecurityGroup("rdsSecurityGroup", {
-  vpcId: vpc.vpc.id,
+const rdsSecurityGroup = new aws.ec2.SecurityGroup("rds-security-group", {
+  vpcId: vpc.vpcId,
   egress: [{
     protocol: "-1",
     fromPort: 0,
@@ -149,7 +164,7 @@ const rdsSecurityGroup = new aws.ec2.SecurityGroup("rdsSecurityGroup", {
     fromPort: targetDbPort,
     toPort: targetDbPort,
     // Grant the frontend UI's security group access to the RDS Postgres database
-    securityGroups: frontendCluster.securityGroups.map(sg => sg.id).concat(pelicanSecurityGroup.id.apply(i => i))
+    securityGroups: [frontendSecurityGroup.id, pelicanSecurityGroup.id]
   }],
 });
 
@@ -195,7 +210,7 @@ const deadletterQueue = new aws.sqs.Queue("dead-letter")
 const deadLetterTopic = new aws.sns.Topic("failed-jobs")
 
 // Subscribe to the SNS Topic
-new aws.sns.TopicSubscription("dlQueueSubscription", {
+new aws.sns.TopicSubscription("dl-queue-subscription", {
   topic: deadLetterTopic.arn,
   protocol: "sqs",
   endpoint: deadletterQueue.arn
@@ -211,7 +226,7 @@ const jobQueue = new aws.sqs.Queue("job-queue", {
 });
 
 // SQS IAM Policy granting access to send messages and get queue URL and attributes
-const sqsPolicy = new aws.iam.Policy("sqsPolicy", {
+const sqsPolicy = new aws.iam.Policy("sqs-policy", {
   policy: pulumi.interpolate`{
         "Version": "2012-10-17",
         "Statement": [{
@@ -226,7 +241,7 @@ const sqsPolicy = new aws.iam.Policy("sqsPolicy", {
     }`
 });
 
-const ecsTaskExecutionRole = new aws.iam.Role("ecsTaskExecutionRole", {
+const ecsTaskExecutionRole = new aws.iam.Role("ecs-task-execution-role", {
   assumeRolePolicy: `{
         "Version": "2012-10-17",
         "Statement": [{
@@ -239,12 +254,12 @@ const ecsTaskExecutionRole = new aws.iam.Role("ecsTaskExecutionRole", {
     }`
 });
 
-new aws.iam.RolePolicyAttachment("sqsPolicyAttachment", {
+new aws.iam.RolePolicyAttachment("sqs-policy-attachment", {
   role: ecsTaskExecutionRole.name,
   policyArn: sqsPolicy.arn
 });
 
-const sqsReadAndDeletePolicy = new aws.iam.Policy("sqsReadAndDeletePolicy", {
+const sqsReadAndDeletePolicy = new aws.iam.Policy("sqs-read-and-delete-policy", {
   policy: pulumi.interpolate`{
         "Version": "2012-10-17",
         "Statement": [{
@@ -260,7 +275,7 @@ const sqsReadAndDeletePolicy = new aws.iam.Policy("sqsReadAndDeletePolicy", {
     }`
 });
 
-const ecsEmuTaskExecutionRole = new aws.iam.Role("ecsEmuTaskExecutionRole", {
+const ecsEmuTaskExecutionRole = new aws.iam.Role("ecs-emu-task-execution-role", {
   assumeRolePolicy: `{
         "Version": "2012-10-17",
         "Statement": [{
@@ -273,7 +288,7 @@ const ecsEmuTaskExecutionRole = new aws.iam.Role("ecsEmuTaskExecutionRole", {
     }`
 });
 
-new aws.iam.RolePolicyAttachment("sqsReadAndDeletePolicyAttachment", {
+new aws.iam.RolePolicyAttachment("sqs-read-and-delete-policy-attachment", {
   role: ecsEmuTaskExecutionRole.name,
   policyArn: sqsReadAndDeletePolicy.arn
 });
@@ -284,36 +299,56 @@ export const jobQueueUrl = jobQueue.url
 /**
  * Frontend application ECS service and networking 
  */
-const alb = new awsx.classic.lb.ApplicationLoadBalancer("lb", { vpc, external: true, securityGroups: frontendCluster.securityGroups });
-
-const targetGroup = alb.createTargetGroup("frontend", {
-  port: 3000,
-  targetType: "ip",
-  protocol: "HTTP",
-})
-
-// Create a Listener that listens on port 80 and forwards traffic to the new Target Group
-const listener = alb.createListener("listener", {
-  port: 80,
-  targetGroup: targetGroup,
+const alb = new awsx.lb.ApplicationLoadBalancer("lb", {
+  defaultTargetGroup: {
+    port: 3000,
+    protocol: "HTTP",
+    targetType: "ip"
+  },
+  internal: false,
+  listener: {
+    port: 80,
+    protocol: "HTTP",
+  },
+  securityGroups: [frontendSecurityGroup.id],
+  subnetIds: vpc.publicSubnetIds,
 });
 
-const pelicanCluster = new awsx.classic.ecs.Cluster("pelicanCluster", {
-  vpc,
-});
+// const targetGroup = alb.createTargetGroup("frontend", {
+//   port: 3000,
+//   targetType: "ip",
+//   protocol: "HTTP",
+// })
 
-const frontendService = new awsx.classic.ecs.FargateService("service", {
-  cluster: frontendCluster,
-  subnets: vpcPublicSubnetIds,
-  assignPublicIp: true,
+// // Create a Listener that listens on port 80 and forwards traffic to the new Target Group
+// const listener = alb.createListener("listener", {
+//   port: 80,
+//   targetGroup: targetGroup,
+// });
+
+const pelicanCluster = new aws.ecs.Cluster("pelican-cluster", {});
+
+const frontendService = new awsx.ecs.FargateService("frontend-service", {
+  cluster: frontendCluster.arn,
   desiredCount: 2,
+  networkConfiguration: {
+    assignPublicIp: true,
+    securityGroups: [frontendSecurityGroup.id],
+    subnets: vpc.publicSubnetIds,
+  },
   taskDefinitionArgs: {
+    taskRole: {
+      roleArn: ecsTaskExecutionRole.arn,
+    },
     container: {
+      name: "frontend",
       image: frontendImage.imageUri,
       cpu: 512,
       memory: 1024,
       essential: true,
-      portMappings: [listener],
+      portMappings: [
+        { containerPort: 80, hostPort: 80 },
+      ],
       environment: [
         { name: "PINECONE_API_KEY", value: process.env.PINECONE_API_KEY as string },
         { name: "PINECONE_ENVIRONMENT", value: process.env.PINECONE_ENVIRONMENT as string },
@@ -330,15 +365,20 @@ const frontendService = new awsx.classic.ecs.FargateService("service", {
   },
 });
 
-const pelicanService = new awsx.classic.ecs.FargateService("pelican-service", {
-  cluster: pelicanCluster,
-  subnets: vpcPrivateSubnetIds,
-  securityGroups: [pelicanSecurityGroup.id.apply(i => i)],
-  assignPublicIp: false,
+const pelicanService = new awsx.ecs.FargateService("pelican-service", {
+  cluster: pelicanCluster.arn,
   desiredCount: 2,
+  networkConfiguration: {
+    assignPublicIp: false,
+    securityGroups: [pelicanSecurityGroup.id],
+    subnets: vpc.privateSubnetIds,
+  },
   taskDefinitionArgs: {
-    taskRole: ecsTaskExecutionRole,
+    taskRole: {
+      roleArn: ecsTaskExecutionRole.arn,
+    },
     container: {
+      name: "pelican",
       image: pelicanImage.imageUri,
       cpu: 512,
       memory: 1024,
@@ -359,19 +399,22 @@ const pelicanService = new awsx.classic.ecs.FargateService("pelican-service", {
 /**
  * EMU: the emu microservice handles embeddings and upserts to the Pinecone index
  */
-const emuCluster = new awsx.classic.ecs.Cluster("emuCluster", {
-  vpc,
-});
+const emuCluster = new aws.ecs.Cluster("emu-cluster", {});
 
-const emuService = new awsx.classic.ecs.FargateService("emu-service", {
-  cluster: emuCluster,
-  subnets: vpcPrivateSubnetIds,
-  securityGroups: [emuSecurityGroup.id],
-  assignPublicIp: false,
+const emuService = new awsx.ecs.FargateService("emu-service", {
+  cluster: emuCluster.arn,
   desiredCount: 2,
+  networkConfiguration: {
+    assignPublicIp: false,
+    securityGroups: [emuSecurityGroup.id],
+    subnets: vpc.privateSubnetIds,
+  },
   taskDefinitionArgs: {
-    taskRole: ecsEmuTaskExecutionRole,
+    taskRole: {
+      roleArn: ecsTaskExecutionRole.arn,
+    },
     container: {
+      name: "emu",
       image: emuImage.imageUri,
       cpu: 4096,
       memory: 8192,
