@@ -1,65 +1,84 @@
-import { query } from "./dbClient";
-import { isBootstrappingComplete } from "./bootstrap";
+import { getClient } from "./dbClient";
 import { SQS } from "aws-sdk";
 
 const sqs = new SQS();
+const BATCH_SIZE = parseInt(process.env.BATCH_SIZE ?? "1000");
 
 export const processBatch = async () => {
-  if (await isBootstrappingComplete()) {
-    console.log("Bootstrapping already completed.");
-    return;
-  }
+    const client = await getClient();
+    let hasMoreRecords = true;
 
-  const batchSize = Number(process.env.BATCH_SIZE ?? 100);
-  let hasMoreRecords = true;
-
-  while (hasMoreRecords) {
     try {
-      // Select records with row-level locking
-      const result = await query(
-        `SELECT * FROM products_with_increment 
-             WHERE processed = FALSE 
-             ORDER BY id 
-             LIMIT $1 FOR UPDATE SKIP LOCKED`,
-        [batchSize],
-      );
+        while (hasMoreRecords) {
+            await client.query('BEGIN');
 
-      const records = result.rows;
+            // Check if bootstrapping is complete
+            const isCompleteResult = await client.query('SELECT is_complete FROM bootstrapping_state');
+            const isBootstrappingComplete = isCompleteResult.rows[0].is_complete;
 
-      if (records.length === 0) {
-        hasMoreRecords = false;
-        // No more records to process, update bootstrapping state
-        await query("UPDATE bootstrapping_state SET is_complete = TRUE");
-        console.log("Bootstrapping process completed.");
-      } else {
-        // Process each record
-        for (const record of records) {
-          const envelope = {
-            payload: {
-              new: record, // Wrap the record as required by downstream microservice
-            },
-          };
+            if (isBootstrappingComplete) {
+                console.log("Bootstrapping already completed.");
+                await client.query('COMMIT');
+                break;
+            }
 
-          // Send the message to the SQS queue
-          await sqs
-            .sendMessage({
-              QueueUrl: process.env.SQS_QUEUE_URL!,
-              MessageBody: JSON.stringify(envelope),
-            })
-            .promise();
+            // Get the last processed ID
+            const lastIdResult = await client.query('SELECT last_id FROM last_record_processed');
+            let lastId = lastIdResult.rows[0].last_id;
+            console.log(`Pelican worker got lastId: ${lastId}`)
 
-          // Update the processed status of the record
-          await query(
-            "UPDATE products_with_increment SET processed = TRUE WHERE id = $1",
-            [record.id],
-          );
+            // Calculate next range of IDs
+            const nextId = lastId + 1;
+            const upperBoundId = nextId + BATCH_SIZE;
+            console.log(`Pelican worker calculated upperBoundId as ${upperBoundId}`)
 
-          console.log(`Record with ID ${record.id} sent to SQS queue`);
+            // Fetch and process records
+            const recordsResult = await client.query(
+                `SELECT * FROM products_with_increment 
+                 WHERE id >= $1 AND id < $2 AND processed = FALSE`,
+                [nextId, upperBoundId]
+            );
+
+            if (recordsResult.rows.length === 0) {
+                hasMoreRecords = false;
+                console.log(`Pelican worker setting bootstrapping as complete`)
+                await client.query('UPDATE bootstrapping_state SET is_complete = TRUE');
+                console.log("All records processed.");
+            } else {
+                for (const record of recordsResult.rows) {
+                    // Process each record
+                    const envelope = {
+                        payload: {
+                            new: record,
+                        },
+                    };
+
+                    // Send the message to the SQS queue
+                    await sqs.sendMessage({
+                        QueueUrl: process.env.SQS_QUEUE_URL!,
+                        MessageBody: JSON.stringify(envelope),
+                    }).promise();
+
+                    // Update the processed status of the record
+                    await client.query(
+                        "UPDATE products_with_increment SET processed = TRUE WHERE id = $1",
+                        [record.id],
+                    );
+
+                    console.log(`Record with ID ${record.id} sent to SQS queue`);
+                }
+
+                // Update last_record_processed table with new last_id
+                await client.query('UPDATE last_record_processed SET last_id = $1', [upperBoundId]);
+            }
+
+            await client.query('COMMIT');
         }
-      }
     } catch (error) {
-      console.error("Error in transaction", error);
-      hasMoreRecords = false;
+        await client.query('ROLLBACK');
+        console.error('Error in processBatch:', error);
+    } finally {
+        client.release();
     }
-  }
 };
+
