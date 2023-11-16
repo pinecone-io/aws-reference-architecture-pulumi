@@ -346,9 +346,10 @@ const frontendService = new awsx.ecs.FargateService("frontend-service", {
       memory: 1024,
       essential: true,
       portMappings: [
-        { containerPort: 80, hostPort: 80 },
+        { containerPort: 3000, hostPort: 3000 },
       ],
       environment: [
+        { name: "HOSTNAME", value: "0.0.0.0" },
         { name: "PINECONE_API_KEY", value: process.env.PINECONE_API_KEY as string },
         { name: "PINECONE_ENVIRONMENT", value: process.env.PINECONE_ENVIRONMENT as string },
         { name: "PINECONE_INDEX", value: process.env.PINECONE_INDEX as string },
