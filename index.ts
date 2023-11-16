@@ -50,8 +50,8 @@ const pelicanSecurityGroup = new aws.ec2.SecurityGroup("pelican-security-group",
   }],
 });
 
-// Create a frontend security group
-const frontendSecurityGroup = new aws.ec2.SecurityGroup("frontend-security-group", {
+// Create a security group for the load balancer
+const lbSecurityGroup = new aws.ec2.SecurityGroup("lb-security-group", {
   vpcId: vpc.vpcId,
   egress: [{
     protocol: "-1",
@@ -64,6 +64,23 @@ const frontendSecurityGroup = new aws.ec2.SecurityGroup("frontend-security-group
     fromPort: 80,
     toPort: 80,
     cidrBlocks: ["0.0.0.0/0"],
+  }],
+});
+
+// Create a security group for the frontend service
+const frontendSecurityGroup = new aws.ec2.SecurityGroup("frontend-security-group", {
+  vpcId: vpc.vpcId,
+  egress: [{
+    protocol: "-1",
+    fromPort: 0,
+    toPort: 0,
+    cidrBlocks: ["0.0.0.0/0"],
+  }],
+  ingress: [{
+    protocol: "tcp",
+    fromPort: 3000,
+    toPort: 3000,
+    securityGroups: [lbSecurityGroup.id],
   }],
 });
 
@@ -298,7 +315,7 @@ export const jobQueueUrl = jobQueue.url
 /**
  * Frontend application ECS service and networking 
  */
-const alb = new awsx.lb.ApplicationLoadBalancer("lb", {
+const alb = new awsx.lb.ApplicationLoadBalancer("alb", {
   defaultTargetGroup: {
     port: 3000,
     protocol: "HTTP",
@@ -309,7 +326,7 @@ const alb = new awsx.lb.ApplicationLoadBalancer("lb", {
     port: 80,
     protocol: "HTTP",
   },
-  securityGroups: [frontendSecurityGroup.id],
+  securityGroups: [lbSecurityGroup.id],
   subnetIds: vpc.publicSubnetIds,
 });
 
@@ -345,9 +362,11 @@ const frontendService = new awsx.ecs.FargateService("frontend-service", {
       cpu: 512,
       memory: 1024,
       essential: true,
-      portMappings: [
-        { containerPort: 3000, hostPort: 3000 },
-      ],
+      portMappings: [{
+        containerPort: 3000,
+        hostPort: 3000, // May be removed, must match containerPort if present
+        targetGroup: alb.defaultTargetGroup,
+      }],
       environment: [
         { name: "HOSTNAME", value: "0.0.0.0" },
         { name: "PINECONE_API_KEY", value: process.env.PINECONE_API_KEY as string },
