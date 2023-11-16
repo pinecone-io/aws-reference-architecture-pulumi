@@ -1,40 +1,28 @@
-import { Client } from 'pg';
+import { Pool } from "pg";
 
-let client: Client | undefined = undefined
-export const runtime = 'edge';
-const db = {
-    getClient: async () => {
-        if (client) return client
-        else {
-            client = new Client({
-                host: process.env.POSTGRES_DB_HOST,
-                port: process.env.POSTGRES_DB_PORT ? parseInt(process.env.POSTGRES_DB_PORT) : 25060,
-                database: process.env.POSTGRES_DB_NAME,
-                user: process.env.POSTGRES_DB_USER,
-                password: process.env.POSTGRES_DB_PASSWORD,
-                ssl: {
-                    rejectUnauthorized: false,
-                },
-            });
+console.log(`process.env.POSTGRES_DB_HOST: ${process.env.POSTGRES_DB_HOST}`)
 
-            await client.connect();
-            return client
-        }
+// Initialize the pool
+const pool = new Pool({
+    host: process.env.POSTGRES_DB_HOST,
+    port: Number(process.env.POSTGRES_DB_PORT || "5432"),
+    database: process.env.POSTGRES_DB_NAME,
+    user: process.env.POSTGRES_DB_USER,
+    password: process.env.POSTGRES_DB_PASSWORD,
+    ssl: {
+        rejectUnauthorized: false,
     },
-    createClient: async () => {
-        const client = new Client({
-            host: process.env.POSTGRES_DB_HOST,
-            port: process.env.POSTGRES_DB_PORT ? parseInt(process.env.POSTGRES_DB_PORT) : 25060,
-            database: process.env.POSTGRES_DB_NAME,
-            user: process.env.POSTGRES_DB_USER,
-            password: process.env.POSTGRES_DB_PASSWORD,
-            ssl: {
-                rejectUnauthorized: false,
-            },
-        });
-        return client
+});
 
+// Query function to execute database queries
+export const query = async (text: string, params?: any[]) => {
+    const client = await pool.connect();
+    try {
+        return await client.query(text, params);
+    } finally {
+        client.release();
     }
-}
+};
 
-export default db
+// Export pool for additional operations if necessary
+export const dbPool = pool;
