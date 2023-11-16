@@ -28,17 +28,38 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Step 3: Create triggers for each action on 'products_with_increment'
-CREATE TRIGGER products_inserted
-AFTER INSERT ON public.products_with_increment
-FOR EACH ROW EXECUTE FUNCTION notify_change();
+-- Check if the trigger 'products_inserted' exists
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'products_inserted') THEN
+        CREATE TRIGGER products_inserted
+        AFTER INSERT ON public.products_with_increment
+        FOR EACH ROW EXECUTE FUNCTION notify_change();
+    END IF;
+END
+$$;
 
-CREATE TRIGGER products_updated
-AFTER UPDATE ON public.products_with_increment
-FOR EACH ROW EXECUTE FUNCTION notify_change();
+-- Check if the trigger 'products_updated' exists
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'products_updated') THEN
+        CREATE TRIGGER products_updated
+        AFTER UPDATE ON public.products_with_increment
+        FOR EACH ROW EXECUTE FUNCTION notify_change();
+    END IF;
+END
+$$;
 
-CREATE TRIGGER products_deleted
-AFTER DELETE ON public.products_with_increment
-FOR EACH ROW EXECUTE FUNCTION notify_change();
+-- Check if the trigger 'products_deleted' exists
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'products_deleted') THEN
+        CREATE TRIGGER products_deleted
+        AFTER DELETE ON public.products_with_increment
+        FOR EACH ROW EXECUTE FUNCTION notify_change();
+    END IF;
+END
+$$;
 
 -- Step 4: Create the 'bootstrapping_state' table
 CREATE TABLE IF NOT EXISTS bootstrapping_state (
@@ -47,3 +68,12 @@ CREATE TABLE IF NOT EXISTS bootstrapping_state (
 
 -- Optional: Insert initial row for bootstrapping state
 INSERT INTO bootstrapping_state (is_complete) VALUES (FALSE);
+
+-- Step 5: Create the 'last_record_processed' table
+CREATE TABLE IF NOT EXISTS last_record_processed (
+    last_id INTEGER NOT NULL DEFAULT 0
+);
+
+-- Optional: Insert initial row for last_record_processed
+INSERT INTO last_record_processed (last_id)
+SELECT 0 WHERE NOT EXISTS (SELECT * FROM last_record_processed);

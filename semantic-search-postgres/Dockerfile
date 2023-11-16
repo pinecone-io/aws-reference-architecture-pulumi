@@ -33,8 +33,8 @@ COPY --link  . .
 # TODO: this is unfortunate, but it appears that if the PINECONE_API_KEY and PINECONE_ENVIRONMENT 
 # variables are not set here, then the app build (npm run build) will fail within the container
 # because our client expects these values to at least be present
-ARG PINECONE_API_KEY=""
-ARG PINECONE_ENVIRONMENT=""
+ARG PINECONE_API_KEY
+ARG PINECONE_ENVIRONMENT
 
 RUN npm run build
 
@@ -44,18 +44,6 @@ RUN npm run build
 # Production image, copy all the files and run next
 FROM base AS runner
 WORKDIR /app
-
-ENV PINECONE_API_KEY=""
-ENV PINECONE_ENVIRONMENT=""
-ENV PINECONE_INDEX="emu"
-
-# Postgres DB env vars
-ENV POSTGRES_DB_NAME="postgres"
-ENV POSTGRES_DB_HOST="localhost"
-ENV POSTGRES_DB_PORT=5432
-ENV POSTGRES_DB_USER="postgres"
-ENV POSTGRES_DB_PASSWORD="password"
-ENV CERTIFICATE_BASE64=""
 
 ENV NODE_ENV production
 # Uncomment the following line in case you want to disable telemetry during runtime.
@@ -74,13 +62,14 @@ COPY --from=builder --link --chown=1001:1001 /app/.next/static ./.next/static
 
 USER nextjs
 
-EXPOSE 3000
-
 ENV PORT 3000
+EXPOSE $PORT
+
+ENV HOSTNAME="0.0.0.0"
 
 # Allow the running process to write model files to the cache folder.
 # NOTE: In practice, you would probably want to pre-download the model files to avoid having to download them on-the-fly.
 RUN mkdir -p /app/node_modules/@xenova/.cache/
 RUN chmod 777 -R /app/node_modules/@xenova/
 
-CMD ["node", "server.js"]
+CMD ["/bin/sh", "-c", "HOSTNAME=${HOSTNAME} PORT=${PORT} node server.js"]
