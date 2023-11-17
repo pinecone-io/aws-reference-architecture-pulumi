@@ -1,11 +1,11 @@
 import { Pinecone } from '@pinecone-database/pinecone'
-import db from '@/utils/db';
+import { query } from '@/utils/db';
 import PipelineSingleton from './pipeline.js';
 import { NextResponse } from 'next/server'
 
 const pinecone = new Pinecone({
   apiKey: process.env.PINECONE_API_KEY,
-  environment: 'eastus-azure',
+  environment: process.env.PINECONE_ENVIRONMENT,
 });
 const limit = 10;
 
@@ -15,8 +15,6 @@ async function handler(req) {
   console.log(`searchTerm: ${searchTerm}, currentPage: ${currentPage}`);
 
   const offset = currentPage > 1 ? (currentPage - 1) * limit : 0;
-
-  const pgClient = await db.getClient();
 
   const indexName = process.env.PINECONE_INDEX;
 
@@ -53,15 +51,15 @@ async function handler(req) {
 
   console.log(`ids before query: ${ids}`)
 
-  const query = `
+  const productsQuery = `
     SELECT * FROM products_with_increment
     ${ids.length > 0 ? `WHERE id IN (${ids.map((id) => `'${id}'`).join(',')})` : ''}
     LIMIT ${limit} OFFSET ${offset}    
   `;
 
-  console.log(`query: ${query}`);
+  console.log(`products query: ${productsQuery}`);
 
-  const products = await pgClient.query(query);
+  const products = await query(productsQuery);
 
   //console.log(products.rows);
 

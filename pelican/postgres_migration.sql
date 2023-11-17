@@ -1,15 +1,17 @@
--- This file describes the changes you need to run on a fresh Postgres database 
--- in order to configure the event listening and functions that will push changesets
--- to Pelican 
+-- Step 1: Create 'products_with_increment' table if it does not exist
+CREATE TABLE IF NOT EXISTS public.products_with_increment (
+    id SERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
+    name VARCHAR(255),
+    sku VARCHAR(255),
+    description TEXT,
+    price MONEY,
+    last_updated DATE,
+    uuid VARCHAR(255),
+    processed BOOLEAN NOT NULL DEFAULT FALSE
+);
 
--- One of the ways to execute this code is to connect to the database via `psql` using the 
--- database username, password, DB hostname, etc and then paste it directly into the Postgres command line
-
--- You could also run this file via `psql` in the following way: 
--- export PGPASSWORD='yourpassword'; psql -h hostname -U username -d databasename -f filename.sql
--- where filename.sql is this local file
-
--- Step 1: Create a function to be executed on changes
+-- Step 2: Create a function for notification on table changes
 CREATE OR REPLACE FUNCTION notify_change() RETURNS TRIGGER AS $$
 BEGIN
     PERFORM pg_notify(
@@ -25,27 +27,53 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Step 2: Create a trigger for each action we are interested in listening for
-CREATE TRIGGER products_inserted
-AFTER INSERT ON public.products_with_increment
-FOR EACH ROW EXECUTE FUNCTION notify_change();
+-- Step 3: Create triggers for each action on 'products_with_increment'
+-- Check if the trigger 'products_inserted' exists
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'products_inserted') THEN
+        CREATE TRIGGER products_inserted
+        AFTER INSERT ON public.products_with_increment
+        FOR EACH ROW EXECUTE FUNCTION notify_change();
+    END IF;
+END
+$$;
 
-CREATE TRIGGER products_updated
-AFTER UPDATE ON public.products_with_increment
-FOR EACH ROW EXECUTE FUNCTION notify_change();
+-- Check if the trigger 'products_updated' exists
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'products_updated') THEN
+        CREATE TRIGGER products_updated
+        AFTER UPDATE ON public.products_with_increment
+        FOR EACH ROW EXECUTE FUNCTION notify_change();
+    END IF;
+END
+$$;
 
-CREATE TRIGGER products_deleted
-AFTER DELETE ON public.products_with_increment
-FOR EACH ROW EXECUTE FUNCTION notify_change();
+-- Check if the trigger 'products_deleted' exists
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'products_deleted') THEN
+        CREATE TRIGGER products_deleted
+        AFTER DELETE ON public.products_with_increment
+        FOR EACH ROW EXECUTE FUNCTION notify_change();
+    END IF;
+END
+$$;
 
--- Step 3: Create the 'locks' table for managing locks and initialization status
-CREATE TABLE IF NOT EXISTS locks (
-    id SERIAL PRIMARY KEY,
-    lock_name VARCHAR(255) UNIQUE NOT NULL,
-    lock_holder VARCHAR(255),
-    created_at TIMESTAMP DEFAULT NOW(),
-    initialized BOOLEAN DEFAULT FALSE -- initialization status column
+-- Step 4: Create the 'bootstrapping_state' table
+CREATE TABLE IF NOT EXISTS bootstrapping_state (
+    is_complete BOOLEAN NOT NULL DEFAULT FALSE
 );
 
--- Create an index on the 'lock_name' column for efficient lookups
-CREATE INDEX IF NOT EXISTS idx_lock_name ON locks (lock_name);
+-- Optional: Insert initial row for bootstrapping state
+INSERT INTO bootstrapping_state (is_complete) VALUES (FALSE);
+
+-- Step 5: Create the 'last_record_processed' table
+CREATE TABLE IF NOT EXISTS last_record_processed (
+    last_id INTEGER NOT NULL DEFAULT 0
+);
+
+-- Optional: Insert initial row for last_record_processed
+INSERT INTO last_record_processed (last_id)
+SELECT 0 WHERE NOT EXISTS (SELECT * FROM last_record_processed);

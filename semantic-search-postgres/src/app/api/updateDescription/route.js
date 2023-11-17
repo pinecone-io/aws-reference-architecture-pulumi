@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
-import db from '@/utils/db';
+import { query } from '@/utils/db';
 
 async function handler(req) {
   const { sku, description } = await req.json();
   console.log(sku, description);
-  const pgClient = await db.getClient();
   try {
-    await pgClient.query(`
+    await query(`
       UPDATE products_with_increment
       SET description = $1
       WHERE sku = $2
@@ -20,7 +19,7 @@ async function handler(req) {
   console.log(`SELECT * FROM products_with_increment WHERE sku = '${sku}' limit 1`);
 
   // Get updated product
-  const updatedProduct = await pgClient.query(`
+  const updatedProduct = await query(`
     SELECT * FROM products_with_increment WHERE sku = $1 limit 1
   `, [sku]);
 

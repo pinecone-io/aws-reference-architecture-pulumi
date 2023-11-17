@@ -8,6 +8,10 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ['sharp', 'onnxruntime-node'],
   },
+
+  env: {
+    hostname: "0.0.0.0",
+  }
 };
 
 module.exports = nextConfig

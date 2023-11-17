@@ -35,76 +35,23 @@ const pelicanRepo = new awsx.ecr.Repository("pelican");
 const emuRepo = new awsx.ecr.Repository("emu");
 
 
+/**
+* Backend - RDS Postgres database
+*/
 const targetDbPort = 5432;
 
-/**
- * Docker image builds
- */
-// The frontend image runs the semantic-search-postgres app 
-// which exposes a searchable table UI to users filled with products 
-// that can be edited. When a product is edited, the frontend app 
-// persists the change to the RDS Postgres instance running in the private
-// subnet. The pelican microservice listens to the RDS Postgres database for 
-// changes and places those changes on the SQS queue
-const frontendImage = new awsx.ecr.Image("frontend-image", {
-  repositoryUrl: frontendRepo.url,
-  context: "./semantic-search-postgres",
-  // These two values must be passed in as build-args, otherwise the call to `new Pinecone();`
-  // fails. They are also set as environment variables
-  args: {
-    "PINECONE_API_KEY": `${process.env.PINECONE_API_KEY}`,
-    "PINECONE_ENVIRONMENT": `${process.env.PINECONE_ENVIRONMENT}`,
-    "PINECONE_INDEX": `${process.env.PINECONE_INDEX}`,
-    "OPENAI_API_KEY": `${process.env.OPENAI_API_KEY}`,
-    "POSTGRES_DB_NAME": `postgres`,
-    "POSTGRES_DB_HOST": `${process.env.POSTGRES_DB_HOST}`,
-    "POSTGRES_DB_PORT": targetDbPort.toString(),
-    "POSTGRES_DB_USER": `${process.env.POSTGRES_DB_USER}`,
-    "POSTGRES_DB_PASSWORD": `${process.env.POSTGRES_DB_PASSWORD}`,
-  }
-})
+const pelicanSecurityGroup = new aws.ec2.SecurityGroup("pelican-security-group", {
+  vpcId: vpc.vpcId,
+  egress: [{
+    protocol: "-1",
+    fromPort: 0,
+    toPort: 0,
+    cidrBlocks: ["0.0.0.0/0"],
+  }],
+});
 
-// The pelican microservice is concerned with listening for changes in the RDS Postgres
-// Database. The RDS Postgres database is configured with Postgres triggers as defined in 
-// the rds_postgres_schema.sql file in the root of this project
-// These triggers are run on table changes, leading to the old and 
-// new records being emitted, picked up by Pelican and placed on the SQS job queue
-const pelicanImage = new awsx.ecr.Image("pelican-image", {
-  repositoryUrl: pelicanRepo.url,
-  context: "./pelican",
-  args: {
-    "POSTGRES_DB_NAME": `postgres`,
-    "POSTGRES_DB_HOST": `${process.env.POSTGRES_DB_HOST}`,
-    "POSTGRES_DB_PORT": targetDbPort.toString(),
-    "POSTGRES_DB_USER": `postgres`,
-    "POSTGRES_DB_PASSWORD": `${process.env.POSTGRES_DB_PASSWORD}`,
-    "AWS_REGION": `${process.env.AWS_REGION}` || 'us-east-1',
-    "SQS_QUEUE_URL": `${process.env.SQS_QUEUE_URL}`
-  }
-})
-
-// Emu is the EMbedding and Upsert (Emu) service, which handles converting the 
-// changed records and product descriptions in to embeddings and upserting them 
-// into the Pinecone index. It runs as a separate ECS service in the private subnet
-const emuImage = new awsx.ecr.Image("emu-image", {
-  repositoryUrl: emuRepo.url,
-  context: "./emu",
-  args: {
-    "PINECONE_INDEX": `${process.env.PINECONE_INDEX}`,
-    "PINECONE_API_KEY": `${process.env.PINECONE_API_KEY}`,
-    "PINECONE_ENVIRONMENT": `${process.env.PINECONE_ENVIRONMENT}`,
-    "AWS_REGION": `${process.env.AWS_REGION}` || 'us-east-1',
-    "SQS_QUEUE_URL": `${process.env.SQS_QUEUE_URL}`
-  }
-})
-
-// Frontend UI ECS Service
-// This is the user-facing UI service, so it is avalable to the public internet 
-// and therefore runs in the public subnet
-const frontendCluster = new aws.ecs.Cluster("frontend-cluster", {});
-
-// Create a frontend security group
-const frontendSecurityGroup = new aws.ec2.SecurityGroup("frontend-security-group", {
+// Create a security group for the load balancer
+const lbSecurityGroup = new aws.ec2.SecurityGroup("lb-security-group", {
   vpcId: vpc.vpcId,
   egress: [{
     protocol: "-1",
@@ -120,14 +67,8 @@ const frontendSecurityGroup = new aws.ec2.SecurityGroup("frontend-security-group
   }],
 });
 
-/**
-* Backend - RDS Postgres database
-*/
-const dbSubnetGroup = new aws.rds.SubnetGroup("db-subnet-group", {
-  subnetIds: vpcPrivateSubnetIds,
-});
-
-const pelicanSecurityGroup = new aws.ec2.SecurityGroup("pelican-security-group", {
+// Create a security group for the frontend service
+const frontendSecurityGroup = new aws.ec2.SecurityGroup("frontend-security-group", {
   vpcId: vpc.vpcId,
   egress: [{
     protocol: "-1",
@@ -135,17 +76,13 @@ const pelicanSecurityGroup = new aws.ec2.SecurityGroup("pelican-security-group",
     toPort: 0,
     cidrBlocks: ["0.0.0.0/0"],
   }],
-});
-
-const emuSecurityGroup = new aws.ec2.SecurityGroup("emu-security-group", {
-  vpcId: vpc.vpcId,
-  egress: [{
-    protocol: "-1",
-    fromPort: 0,
-    toPort: 0,
-    cidrBlocks: ["0.0.0.0/0"],
+  ingress: [{
+    protocol: "tcp",
+    fromPort: 3000,
+    toPort: 3000,
+    securityGroups: [lbSecurityGroup.id],
   }],
-})
+});
 
 // Configure the RDS security group to only accept traffic from the pelican ECS 
 // service's security group. This allows us to keep access to the RDS Postgres 
@@ -168,6 +105,20 @@ const rdsSecurityGroup = new aws.ec2.SecurityGroup("rds-security-group", {
   }],
 });
 
+const dbSubnetGroup = new aws.rds.SubnetGroup("db-subnet-group", {
+  subnetIds: vpcPrivateSubnetIds,
+});
+
+const emuSecurityGroup = new aws.ec2.SecurityGroup("emu-security-group", {
+  vpcId: vpc.vpcId,
+  egress: [{
+    protocol: "-1",
+    fromPort: 0,
+    toPort: 0,
+    cidrBlocks: ["0.0.0.0/0"],
+  }],
+})
+
 // Postgres database
 // This RDS Postgres database stores product information and natural language descriptions
 // of each product. When a record is edited by the user on the frontend table UI, the 
@@ -176,7 +127,7 @@ const rdsSecurityGroup = new aws.ec2.SecurityGroup("rds-security-group", {
 const db = new aws.rds.Instance("mydb", {
   // This RDS snapshot has the products_with_increment table already created and is populated with the data from 
   // data/products_no_ids.csv
-  snapshotIdentifier: "arn:aws:rds:us-east-1:675304494746:snapshot:pinecone-aws-refarch-postgres-snapshot-v2",
+  snapshotIdentifier: "arn:aws:rds:us-east-1:675304494746:snapshot:pinecone-aws-refarch-postgres-snapshot-v4",
   dbSubnetGroupName: dbSubnetGroup.name,
   engine: "postgres",
   engineVersion: "15.4",
@@ -198,11 +149,76 @@ export const dbUser = db.username
 export const dbPassword = db.password.apply(p => p)
 
 /**
+ * Docker image builds
+ */
+// The frontend image runs the semantic-search-postgres app 
+// which exposes a searchable table UI to users filled with products 
+// that can be edited. When a product is edited, the frontend app 
+// persists the change to the RDS Postgres instance running in the private
+// subnet. The pelican microservice listens to the RDS Postgres database for 
+// changes and places those changes on the SQS queue
+const frontendImage = new awsx.ecr.Image("frontend-image", {
+  repositoryUrl: frontendRepo.url,
+  platform: "linux/amd64",
+  context: "./semantic-search-postgres",
+  // These two values must be passed in as build-args, otherwise the call to `new Pinecone();`
+  // fails. They are also set as environment variables
+  args: {
+    "PINECONE_API_KEY": `${process.env.PINECONE_API_KEY}`,
+    "PINECONE_ENVIRONMENT": `${process.env.PINECONE_ENVIRONMENT}`,
+    "PINECONE_INDEX": `${process.env.PINECONE_INDEX}`,
+    "POSTGRES_DB_NAME": `postgres`,
+    "POSTGRES_DB_HOST": dbAddress.apply(a => a),
+    "POSTGRES_DB_PORT": targetDbPort.toString(),
+    "POSTGRES_DB_USER": `${process.env.POSTGRES_DB_USER}`,
+    "POSTGRES_DB_PASSWORD": `${process.env.POSTGRES_DB_PASSWORD}`,
+  }
+})
+
+// The pelican microservice is concerned with listening for changes in the RDS Postgres
+// Database. The RDS Postgres database is configured with Postgres triggers as defined in 
+// the rds_postgres_schema.sql file in the root of this project
+// These triggers are run on table changes, leading to the old and 
+// new records being emitted, picked up by Pelican and placed on the SQS job queue
+const pelicanImage = new awsx.ecr.Image("pelican-image", {
+  repositoryUrl: pelicanRepo.url,
+  platform: "linux/amd64",
+  context: "./pelican",
+  args: {
+    "POSTGRES_DB_NAME": `postgres`,
+    "POSTGRES_DB_HOST": dbAddress.apply(a => a),
+    "POSTGRES_DB_PORT": targetDbPort.toString(),
+    "POSTGRES_DB_USER": `postgres`,
+    "POSTGRES_DB_PASSWORD": `${process.env.POSTGRES_DB_PASSWORD}`,
+    "AWS_REGION": `${process.env.AWS_REGION}` || 'us-east-1',
+    "SQS_QUEUE_URL": `${process.env.SQS_QUEUE_URL}`
+  }
+})
+
+// Emu is the EMbedding and Upsert (Emu) service, which handles converting the 
+// changed records and product descriptions in to embeddings and upserting them 
+// into the Pinecone index. It runs as a separate ECS service in the private subnet
+const emuImage = new awsx.ecr.Image("emu-image", {
+  repositoryUrl: emuRepo.url,
+  platform: "linux/amd64",
+  context: "./emu",
+  args: {
+    "PINECONE_INDEX": `${process.env.PINECONE_INDEX}`,
+    "PINECONE_API_KEY": `${process.env.PINECONE_API_KEY}`,
+    "PINECONE_ENVIRONMENT": `${process.env.PINECONE_ENVIRONMENT}`,
+    "AWS_REGION": `${process.env.AWS_REGION}` || 'us-east-1',
+    "SQS_QUEUE_URL": `${process.env.SQS_QUEUE_URL}`
+  }
+})
+
+// Frontend UI ECS Service
+// This is the user-facing UI service, so it is avalable to the public internet 
+// and therefore runs in the public subnet
+const frontendCluster = new aws.ecs.Cluster("frontend-cluster", {});
+
+/**
  * Supporting resources
  */
-// Create an S3 bucket to store video frames
-const bucket = new aws.s3.Bucket("input-bucket");
-
 // Create an SQS queue to handle dead letters
 const deadletterQueue = new aws.sqs.Queue("dead-letter")
 
@@ -299,7 +315,7 @@ export const jobQueueUrl = jobQueue.url
 /**
  * Frontend application ECS service and networking 
  */
-const alb = new awsx.lb.ApplicationLoadBalancer("lb", {
+const alb = new awsx.lb.ApplicationLoadBalancer("alb", {
   defaultTargetGroup: {
     port: 3000,
     protocol: "HTTP",
@@ -310,7 +326,7 @@ const alb = new awsx.lb.ApplicationLoadBalancer("lb", {
     port: 80,
     protocol: "HTTP",
   },
-  securityGroups: [frontendSecurityGroup.id],
+  securityGroups: [lbSecurityGroup.id],
   subnetIds: vpc.publicSubnetIds,
 });
 
@@ -346,15 +362,17 @@ const frontendService = new awsx.ecs.FargateService("frontend-service", {
       cpu: 512,
       memory: 1024,
       essential: true,
-      portMappings: [
-        { containerPort: 80, hostPort: 80 },
-      ],
+      portMappings: [{
+        containerPort: 3000,
+        hostPort: 3000, // May be removed, must match containerPort if present
+        targetGroup: alb.defaultTargetGroup,
+      }],
       environment: [
+        { name: "HOSTNAME", value: "0.0.0.0" },
         { name: "PINECONE_API_KEY", value: process.env.PINECONE_API_KEY as string },
         { name: "PINECONE_ENVIRONMENT", value: process.env.PINECONE_ENVIRONMENT as string },
         { name: "PINECONE_INDEX", value: process.env.PINECONE_INDEX as string },
-        { name: "OPENAI_API_KEY", value: process.env.OPENAI_API_KEY as string },
-        { name: "POSTGRES_DB_NAME", value: dbName.apply(n => n) },
+        { name: "POSTGRES_DB_NAME", value: 'postgres' },
         // Pass in the hostname and port of the RDS Postgres instance so the frontend knows where to find it
         { name: "POSTGRES_DB_HOST", value: dbAddress.apply(a => a) },
         { name: "POSTGRES_DB_PORT", value: dbPort.apply(p => p.toString()) },
@@ -390,7 +408,8 @@ const pelicanService = new awsx.ecs.FargateService("pelican-service", {
         { name: "POSTGRES_DB_USER", value: dbUser.apply(u => u) },
         { name: "POSTGRES_DB_PASSWORD", value: dbPassword.apply(p => p as unknown as string) },
         { name: "AWS_REGION", value: process.env.AWS_REGION ?? 'us-east-1' },
-        { name: "SQS_QUEUE_URL", value: jobQueueUrl }
+        { name: "SQS_QUEUE_URL", value: jobQueueUrl },
+        { name: "BATCH_SIZE", value: process.env.BATCH_SIZE ?? "1000" },
       ],
     },
   },
@@ -411,7 +430,7 @@ const emuService = new awsx.ecs.FargateService("emu-service", {
   },
   taskDefinitionArgs: {
     taskRole: {
-      roleArn: ecsTaskExecutionRole.arn,
+      roleArn: ecsEmuTaskExecutionRole.arn,
     },
     container: {
       name: "emu",
@@ -420,6 +439,8 @@ const emuService = new awsx.ecs.FargateService("emu-service", {
       memory: 8192,
       essential: true,
       environment: [
+        { name: "PINECONE_API_KEY", value: process.env.PINECONE_API_KEY as string },
+        { name: "PINECONE_ENVIRONMENT", value: process.env.PINECONE_ENVIRONMENT as string },
         { name: "PINECONE_INDEX", value: process.env.PINECONE_INDEX as string },
         { name: "AWS_REGION", value: process.env.AWS_REGION ?? "us-east-1" },
         { name: "SQS_QUEUE_URL", value: jobQueueUrl }
@@ -431,13 +452,13 @@ const emuService = new awsx.ecs.FargateService("emu-service", {
 /**
  * Emu autoscaling configuration
  */
-export const emuClusterName = emuCluster.cluster.name
+export const emuClusterName = emuCluster.name
 export const emuServiceName = emuService.service.name
 
 const emuResourceId = pulumi.interpolate`service/${emuClusterName}/${emuServiceName}`;
 
 const ecsTarget = new aws.appautoscaling.Target("ecsTarget", {
-  maxCapacity: 8,
+  maxCapacity: 50,
   minCapacity: 2,
   resourceId: emuResourceId,
   scalableDimension: "ecs:service:DesiredCount",
@@ -449,6 +470,37 @@ const cpuUtilizationPolicy = new aws.appautoscaling.Policy("cpuUtilizationPolicy
   resourceId: ecsTarget.resourceId,
   scalableDimension: ecsTarget.scalableDimension,
   serviceNamespace: ecsTarget.serviceNamespace,
+  targetTrackingScalingPolicyConfiguration: {
+    targetValue: 25, // Target CPU utilization percentage
+    predefinedMetricSpecification: {
+      predefinedMetricType: "ECSServiceAverageCPUUtilization",
+    },
+    scaleInCooldown: 30,
+    scaleOutCooldown: 30,
+  },
+});
+
+/**
+ * Pelican autoscaling configuration
+ */
+export const pelicanClusterName = pelicanCluster.name
+export const pelicanServiceName = pelicanService.service.name
+
+const pelicanResourceId = pulumi.interpolate`service/${pelicanClusterName}/${pelicanServiceName}`;
+
+const pelicanEcsTarget = new aws.appautoscaling.Target("pelicanEcsTarget", {
+  maxCapacity: 30,
+  minCapacity: 2,
+  resourceId: pelicanResourceId,
+  scalableDimension: "ecs:service:DesiredCount",
+  serviceNamespace: "ecs",
+});
+
+const pelicanCpuUtilizationPolicy = new aws.appautoscaling.Policy("pelicanCpuUtilizationPolicy", {
+  policyType: "TargetTrackingScaling",
+  resourceId: pelicanEcsTarget.resourceId,
+  scalableDimension: pelicanEcsTarget.scalableDimension,
+  serviceNamespace: pelicanEcsTarget.serviceNamespace,
   targetTrackingScalingPolicyConfiguration: {
     targetValue: 25, // Target CPU utilization percentage
     predefinedMetricSpecification: {
@@ -473,5 +525,4 @@ export const serviceUrn = frontendService.urn
 export const pelicanServiceUrn = pelicanService.urn
 export const emuServiceUrn = emuService.urn
 
-export const bucketName = bucket.id;
 export const deadLetterQueueId = deadletterQueue.id

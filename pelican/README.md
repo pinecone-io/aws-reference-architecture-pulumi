@@ -9,11 +9,9 @@ Pelican is a component of [the Pinecone Reference Architecture](https://github.c
 
 ## Getting started
 
-## Running Pelican
+## Pelican environment variables
 
-1. Export the required environment variables which Pelican uses to connect to the Postgres database:
-
-The following environment variables control Pelican's access to the Postgres database it will listen to for changes:
+The following environment variables are required:
 
 - `POSTGREST_DB_USER` - The Postgres username
 - `POSTGRES_DB_HOST` - The Postgres hostname - if using RDS this is the full DNS endpoint
@@ -22,7 +20,5 @@ The following environment variables control Pelican's access to the Postgres dat
 - `POSTGRES_DB_PORT` - The Postgres port - note that AWS tends to use a different port than other hosts by default
 - `AWS_REGION` - The AWS Region where the SQS job queue is running
 - `SQS_QUEUE_URL` - The URL to the SQS endpoint for placing jobs on the queue
-
-The following environment variables allow Pelican to find the Emu microservice that it forwards changes to
-
+- `BATCH_SIZE` - The number of Postgres records to select at one time when Pelican is performing the initial bootstrapping routine
 - `EMU_ENDPOINT` - The endpoint where the [Emu microservice](https://github.com/pinecone-io/emu)

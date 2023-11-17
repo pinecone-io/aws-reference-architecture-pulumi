@@ -2,14 +2,9 @@ import { Notification } from "pg";
 import process from "process";
 import { SQS } from "aws-sdk";
 import checkEnvVars from "./utils";
-import {
-  acquireLock,
-  releaseLock,
-  checkInitializationStatus,
-} from "./lockManager";
-import { fetchAndSendRecordsToSQS } from "./sqsHelper";
 import { getClient } from "./dbClient";
 import { type PoolClient } from "pg";
+import { processBatch } from "./processBatch";
 
 const sqs = new SQS({ region: process.env.AWS_REGION });
 
@@ -24,24 +19,8 @@ async function connectToDatabase() {
       "Pelican: Database connected successfully. Listening for changes...",
     );
 
-    const isInitialized = await checkInitializationStatus();
+    await processBatch();
 
-    if (!isInitialized) {
-      const lockAcquired = await acquireLock();
-
-      if (lockAcquired) {
-        console.log("Lock acquired, running fetchAndSendRecordsToSQS...");
-        await fetchAndSendRecordsToSQS();
-        await releaseLock();
-        console.log("Initialization complete, lock released.");
-      } else {
-        console.log(
-          "Initialization is already in progress by another instance.",
-        );
-      }
-    } else {
-      console.log("Initialization has already been completed. Skipping.");
-    }
     await listenForTableChanges();
   } catch (err: unknown) {
     handleDatabaseConnectionError(err);
@@ -72,10 +51,12 @@ async function listenForTableChanges() {
 
 function handleNotification(message: Notification) {
   try {
-    if (message.channel === "table_change") {
-      const payload = JSON.parse(message.payload as string);
-      console.log("Change detected:", payload);
-      forwardMessageToQueue(payload);
+    if (message.channel === "table_change" && message.payload) {
+      const payloadObject = JSON.parse(message.payload as string);
+
+      console.log(`Pelican handleNotification payloadObject: %o`, payloadObject)
+
+      forwardMessageToQueue(payloadObject);
     }
   } catch (error: unknown) {
     if (error instanceof Error) {
@@ -101,7 +82,7 @@ function reconnectToDatabase() {
 
 connectToDatabase();
 
-async function forwardMessageToQueue(message: Notification) {
+async function forwardMessageToQueue(message: any) {
   try {
     const params = {
       QueueUrl: process.env.SQS_QUEUE_URL!,
