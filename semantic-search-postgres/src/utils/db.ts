@@ -1,6 +1,6 @@
 import { Pool } from "pg";
 
-console.log(`process.env.POSTGRES_DB_HOST: ${process.env.POSTGRES_DB_HOST}`)
+console.log(`process.env: %o`, process.env)
 
 // Initialize the pool
 const pool = new Pool({

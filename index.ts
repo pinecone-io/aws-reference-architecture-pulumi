@@ -127,7 +127,7 @@ const emuSecurityGroup = new aws.ec2.SecurityGroup("emu-security-group", {
 const db = new aws.rds.Instance("mydb", {
   // This RDS snapshot has the products_with_increment table already created and is populated with the data from 
   // data/products_no_ids.csv
-  snapshotIdentifier: "arn:aws:rds:us-east-1:675304494746:snapshot:pinecone-aws-refarch-postgres-snapshot-v3",
+  snapshotIdentifier: "arn:aws:rds:us-east-1:675304494746:snapshot:pinecone-aws-refarch-postgres-snapshot-v4",
   dbSubnetGroupName: dbSubnetGroup.name,
   engine: "postgres",
   engineVersion: "15.4",
@@ -409,7 +409,7 @@ const pelicanService = new awsx.ecs.FargateService("pelican-service", {
         { name: "POSTGRES_DB_PASSWORD", value: dbPassword.apply(p => p as unknown as string) },
         { name: "AWS_REGION", value: process.env.AWS_REGION ?? 'us-east-1' },
         { name: "SQS_QUEUE_URL", value: jobQueueUrl },
-        { name: "BATCH_SIZE", value: "1000" },
+        { name: "BATCH_SIZE", value: process.env.BATCH_SIZE ?? "1000" },
       ],
     },
   },
@@ -502,7 +502,7 @@ const pelicanCpuUtilizationPolicy = new aws.appautoscaling.Policy("pelicanCpuUti
   scalableDimension: pelicanEcsTarget.scalableDimension,
   serviceNamespace: pelicanEcsTarget.serviceNamespace,
   targetTrackingScalingPolicyConfiguration: {
-    targetValue: 65, // Target CPU utilization percentage
+    targetValue: 25, // Target CPU utilization percentage
     predefinedMetricSpecification: {
       predefinedMetricType: "ECSServiceAverageCPUUtilization",
     },

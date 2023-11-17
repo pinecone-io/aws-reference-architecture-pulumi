@@ -51,10 +51,12 @@ async function listenForTableChanges() {
 
 function handleNotification(message: Notification) {
   try {
-    if (message.channel === "table_change") {
-      const payload = JSON.parse(message.payload as string);
-      console.log("Change detected:", payload);
-      forwardMessageToQueue(payload);
+    if (message.channel === "table_change" && message.payload) {
+      const payloadObject = JSON.parse(message.payload as string);
+
+      console.log(`Pelican handleNotification payloadObject: %o`, payloadObject)
+
+      forwardMessageToQueue(payloadObject);
     }
   } catch (error: unknown) {
     if (error instanceof Error) {
@@ -80,7 +82,7 @@ function reconnectToDatabase() {
 
 connectToDatabase();
 
-async function forwardMessageToQueue(message: Notification) {
+async function forwardMessageToQueue(message: any) {
   try {
     const params = {
       QueueUrl: process.env.SQS_QUEUE_URL!,

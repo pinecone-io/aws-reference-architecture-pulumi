@@ -77,10 +77,7 @@ const pollMessages = async () => {
         }
 
         try {
-          const envelope = JSON.parse(message.Body);
-          console.log("envelope: %o", envelope);
-
-          const payload = envelope.payload
+          const payload = JSON.parse(message.Body);
           console.log(`payload: %o`, payload);
 
           // Ensure the payload has the expected structure before proceeding

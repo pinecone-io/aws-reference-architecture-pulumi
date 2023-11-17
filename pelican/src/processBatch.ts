@@ -16,7 +16,7 @@ export const processBatch = async () => {
             const isCompleteResult = await client.query('SELECT is_complete FROM bootstrapping_state');
             const isBootstrappingComplete = isCompleteResult.rows[0].is_complete;
 
-            if (isBootstrappingComplete) {
+            if (isBootstrappingComplete === true) {
                 console.log("Bootstrapping already completed.");
                 await client.query('COMMIT');
                 break;
@@ -40,17 +40,26 @@ export const processBatch = async () => {
             );
 
             if (recordsResult.rows.length === 0) {
-                hasMoreRecords = false;
-                console.log(`Pelican worker setting bootstrapping as complete`)
-                await client.query('UPDATE bootstrapping_state SET is_complete = TRUE');
-                console.log("All records processed.");
+                // Check if there are any unprocessed records left in the entire table
+                const remainingRecordsResult = await client.query(
+                    'SELECT COUNT(*) FROM products_with_increment WHERE processed = FALSE'
+                );
+                const remainingRecordsCount = parseInt(remainingRecordsResult.rows[0].count, 10);
+
+                if (remainingRecordsCount === 0) {
+                    hasMoreRecords = false
+                    console.log(`Pelican worker setting bootstrapping as complete`);
+                    await client.query('UPDATE bootstrapping_state SET is_complete = TRUE');
+                    console.log(`All records processed.`)
+                } else {
+                    console.log(`No records in the current batch, but ${remainingRecordsCount} unprocessed records remain.`);
+                }
+
             } else {
                 for (const record of recordsResult.rows) {
                     // Process each record
                     const envelope = {
-                        payload: {
-                            new: record,
-                        },
+                        new: record,
                     };
 
                     // Send the message to the SQS queue
