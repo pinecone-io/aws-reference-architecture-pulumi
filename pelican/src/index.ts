@@ -54,7 +54,10 @@ function handleNotification(message: Notification) {
     if (message.channel === "table_change" && message.payload) {
       const payloadObject = JSON.parse(message.payload as string);
 
-      console.log(`Pelican handleNotification payloadObject: %o`, payloadObject)
+      console.log(
+        `Pelican handleNotification payloadObject: %o`,
+        payloadObject,
+      );
 
       forwardMessageToQueue(payloadObject);
     }

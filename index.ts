@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi"
+import * as docker from "@pulumi/docker";
 import * as aws from "@pulumi/aws";
 import * as awsx from "@pulumi/awsx";
 import checkEnvVars from "./utils"
@@ -30,9 +31,64 @@ export const vpcPublicSubnetIds = vpc.publicSubnetIds;
  * - Pelican microservice (listen for changes from Postgres)
  * - Emu microservice (perform embeddings and upserts to Pinecone)
  */
-const frontendRepo = new awsx.ecr.Repository("frontend");
-const pelicanRepo = new awsx.ecr.Repository("pelican");
-const emuRepo = new awsx.ecr.Repository("emu");
+
+const frontendRepo = new aws.ecr.Repository("frontend-repo", {
+  forceDelete: true,
+})
+
+// Get frontend repo info (creds and endpoint) so we can build/publish to it.
+const frontendRegistryInfo = frontendRepo.registryId.apply(async id => {
+  const credentials = await aws.ecr.getCredentials({ registryId: id });
+  const decodedCredentials = Buffer.from(credentials.authorizationToken, "base64").toString();
+  const [username, password] = decodedCredentials.split(":");
+  if (!password || !username) {
+    throw new Error("Invalid credentials");
+  }
+  return {
+    server: credentials.proxyEndpoint,
+    username: username,
+    password: password,
+  };
+});
+
+
+const pelicanRepo = new aws.ecr.Repository("pelican-repo", {
+  forceDelete: true,
+});
+
+// Get pelican registry info (creds and endpoint) so we can build/publish to it.
+const registryInfo = pelicanRepo.registryId.apply(async id => {
+  const credentials = await aws.ecr.getCredentials({ registryId: id });
+  const decodedCredentials = Buffer.from(credentials.authorizationToken, "base64").toString();
+  const [username, password] = decodedCredentials.split(":");
+  if (!password || !username) {
+    throw new Error("Invalid credentials");
+  }
+  return {
+    server: credentials.proxyEndpoint,
+    username: username,
+    password: password,
+  };
+});
+
+
+const emuRepo = new aws.ecr.Repository("emu-repo", {
+  forceDelete: true,
+});
+
+const emuRegistryInfo = emuRepo.registryId.apply(async id => {
+  const credentials = await aws.ecr.getCredentials({ registryId: id });
+  const decodedCredentials = Buffer.from(credentials.authorizationToken, "base64").toString();
+  const [username, password] = decodedCredentials.split(":");
+  if (!password || !username) {
+    throw new Error("Invalid credentials");
+  }
+  return {
+    server: credentials.proxyEndpoint,
+    username: username,
+    password: password,
+  };
+});
 
 
 /**
@@ -157,62 +213,74 @@ export const dbPassword = db.password.apply(p => p)
 // persists the change to the RDS Postgres instance running in the private
 // subnet. The pelican microservice listens to the RDS Postgres database for 
 // changes and places those changes on the SQS queue
-const frontendImage = new awsx.ecr.Image("frontend-image", {
-  repositoryUrl: frontendRepo.url,
-  platform: "linux/amd64",
-  context: "./semantic-search-postgres",
-  // These two values must be passed in as build-args, otherwise the call to `new Pinecone();`
-  // fails. They are also set as environment variables
-  args: {
-    "PINECONE_API_KEY": `${process.env.PINECONE_API_KEY}`,
-    "PINECONE_ENVIRONMENT": `${process.env.PINECONE_ENVIRONMENT}`,
-    "PINECONE_INDEX": `${process.env.PINECONE_INDEX}`,
-    "POSTGRES_DB_NAME": `postgres`,
-    "POSTGRES_DB_HOST": dbAddress.apply(a => a),
-    "POSTGRES_DB_PORT": targetDbPort.toString(),
-    "POSTGRES_DB_USER": `${process.env.POSTGRES_DB_USER}`,
-    "POSTGRES_DB_PASSWORD": `${process.env.POSTGRES_DB_PASSWORD}`,
-  }
+const frontendImage = new docker.Image('frontend-image', {
+  build: {
+    platform: "linux/amd64",
+    context: "./semantic-search-postgres/",
+    dockerfile: "./semantic-search-postgres/Dockerfile",
+    args: {
+      "PINECONE_API_KEY": `${process.env.PINECONE_API_KEY}`,
+      "PINECONE_ENVIRONMENT": `${process.env.PINECONE_ENVIRONMENT}`,
+      "PINECONE_INDEX": `${process.env.PINECONE_INDEX}`,
+      "POSTGRES_DB_NAME": `postgres`,
+      "POSTGRES_DB_HOST": dbAddress.apply(a => a),
+      "POSTGRES_DB_PORT": targetDbPort.toString(),
+      "POSTGRES_DB_USER": `${process.env.POSTGRES_DB_USER}`,
+      "POSTGRES_DB_PASSWORD": `${process.env.POSTGRES_DB_PASSWORD}`,
+    },
+  },
+  imageName: frontendRepo.repositoryUrl,
+  registry: frontendRegistryInfo,
 })
-
+export const frontendRepoDigest = frontendImage.repoDigest
 // The pelican microservice is concerned with listening for changes in the RDS Postgres
 // Database. The RDS Postgres database is configured with Postgres triggers as defined in 
 // the rds_postgres_schema.sql file in the root of this project
 // These triggers are run on table changes, leading to the old and 
 // new records being emitted, picked up by Pelican and placed on the SQS job queue
-const pelicanImage = new awsx.ecr.Image("pelican-image", {
-  repositoryUrl: pelicanRepo.url,
-  platform: "linux/amd64",
-  context: "./pelican",
-  args: {
-    "POSTGRES_DB_NAME": `postgres`,
-    "POSTGRES_DB_HOST": dbAddress.apply(a => a),
-    "POSTGRES_DB_PORT": targetDbPort.toString(),
-    "POSTGRES_DB_USER": `postgres`,
-    "POSTGRES_DB_PASSWORD": `${process.env.POSTGRES_DB_PASSWORD}`,
-    "AWS_REGION": `${process.env.AWS_REGION}` || 'us-east-1',
-    "SQS_QUEUE_URL": `${process.env.SQS_QUEUE_URL}`
-  }
-})
+const pelicanImage = new docker.Image("pelican-image", {
+  build: {
+    platform: "linux/amd64",
+    context: "./pelican",
+    dockerfile: "./pelican/Dockerfile",
+    args: {
+      "POSTGRES_DB_NAME": `postgres`,
+      "POSTGRES_DB_HOST": dbAddress.apply(a => a),
+      "POSTGRES_DB_PORT": targetDbPort.toString(),
+      "POSTGRES_DB_USER": `postgres`,
+      "POSTGRES_DB_PASSWORD": `${process.env.POSTGRES_DB_PASSWORD}`,
+      "AWS_REGION": `${process.env.AWS_REGION}` || 'us-east-1',
+      "SQS_QUEUE_URL": `${process.env.SQS_QUEUE_URL}`
+    }
+  },
+  imageName: pelicanRepo.repositoryUrl,
+  registry: registryInfo,
+});
+export const pelicanRepoDigest = pelicanImage.repoDigest;
 
 // Emu is the EMbedding and Upsert (Emu) service, which handles converting the 
 // changed records and product descriptions in to embeddings and upserting them 
 // into the Pinecone index. It runs as a separate ECS service in the private subnet
-const emuImage = new awsx.ecr.Image("emu-image", {
-  repositoryUrl: emuRepo.url,
-  platform: "linux/amd64",
-  context: "./emu",
-  args: {
-    "PINECONE_INDEX": `${process.env.PINECONE_INDEX}`,
-    "PINECONE_API_KEY": `${process.env.PINECONE_API_KEY}`,
-    "PINECONE_ENVIRONMENT": `${process.env.PINECONE_ENVIRONMENT}`,
-    "AWS_REGION": `${process.env.AWS_REGION}` || 'us-east-1',
-    "SQS_QUEUE_URL": `${process.env.SQS_QUEUE_URL}`
-  }
+const emuImage = new docker.Image("emu-image", {
+  build: {
+    platform: "linux/amd64",
+    context: "./emu",
+    dockerfile: "./emu/Dockerfile",
+    args: {
+      "PINECONE_INDEX": `${process.env.PINECONE_INDEX}`,
+      "PINECONE_API_KEY": `${process.env.PINECONE_API_KEY}`,
+      "PINECONE_ENVIRONMENT": `${process.env.PINECONE_ENVIRONMENT}`,
+      "AWS_REGION": `${process.env.AWS_REGION}` || 'us-east-1',
+      "SQS_QUEUE_URL": `${process.env.SQS_QUEUE_URL}`
+    }
+  },
+  imageName: emuRepo.repositoryUrl,
+  registry: emuRegistryInfo,
 })
+export const emuRepoDigest = emuImage.repoDigest
 
 // Frontend UI ECS Service
-// This is the user-facing UI service, so it is avalable to the public internet 
+// This is the user-facing UI service, so it is available to the public internet 
 // and therefore runs in the public subnet
 const frontendCluster = new aws.ecs.Cluster("frontend-cluster", {});
 
@@ -358,7 +426,7 @@ const frontendService = new awsx.ecs.FargateService("frontend-service", {
     },
     container: {
       name: "frontend",
-      image: frontendImage.imageUri,
+      image: pulumi.interpolate`${frontendRepo.repositoryUrl}:latest`,
       cpu: 512,
       memory: 1024,
       essential: true,
@@ -397,7 +465,9 @@ const pelicanService = new awsx.ecs.FargateService("pelican-service", {
     },
     container: {
       name: "pelican",
-      image: pelicanImage.imageUri,
+      //image: pelicanImage.imageUri,
+      //image: pelicanRepoDigest,
+      image: pulumi.interpolate`${pelicanRepo.repositoryUrl}:latest`,
       cpu: 512,
       memory: 1024,
       essential: true,
@@ -434,7 +504,9 @@ const emuService = new awsx.ecs.FargateService("emu-service", {
     },
     container: {
       name: "emu",
-      image: emuImage.imageUri,
+      //image: emuImage.imageUri,
+      //image: emuRepoDigest,
+      image: pulumi.interpolate`${emuRepo.repositoryUrl}:latest`,
       cpu: 4096,
       memory: 8192,
       essential: true,
