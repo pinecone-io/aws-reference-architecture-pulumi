@@ -7,7 +7,7 @@ This document explains core concepts and functionality within the Pinecone AWS R
 
 ## Initial data bootstrapping flow
 
-<img alt="Bootstrapping data from Postgres to Pinecone" src="./postgres-to-pinecone-bootstrapping.png" />
+<img alt="Bootstrapping data from Postgres to Pinecone" src="./postgres-to-pinecone-bootstrapping.png" width="500" />
 
 The initial data bootstrapping phase is a crucial component of the Reference Architecture. 
 
