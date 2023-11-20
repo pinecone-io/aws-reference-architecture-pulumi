@@ -1,6 +1,6 @@
 # Architecture Overview 
 
-![Pinecone AWS Reference Architecture](./docs/aws-ref-arch-pulumi.png)
+![Pinecone AWS Reference Architecture](./aws-ref-arch-pulumi.png)
 
 The Pinecone AWS Reference Architecture, implemented using Pulumi, is a comprehensive cloud solution designed to orchestrate, deploy, and manage various components within the AWS ecosystem efficiently. The architecture leverages AWS services and Pulumi's Infrastructure as Code (IaC) capabilities to create a robust and scalable environment.
 Core Components
@@ -44,9 +44,9 @@ Core Components
 The Pinecone AWS Reference Architecture is comprised of three applications (one frontend UI app and two microservices) as well as the Pinecone index 
 and the AWS infrastructure to support these: 
 
-- semantic-search-postgres (user-facing UI application which enables semantic search over a table of products)
-- pelican (microservice that listens to the RDS Postgres instance for changes and puts changes on the SQS jobs queue)
-- emu (microservice that takes jobs off the SQS queue and embeds and upserts their contents into the Pinecone index)
+- `semantic-search-postgres` (user-facing UI application which enables semantic search over a table of products)
+- `pelican` (microservice that listens to the RDS Postgres instance for changes and puts changes on the SQS jobs queue)
+- `emu` (microservice that takes jobs off the SQS queue and embeds and upserts their contents into the Pinecone index)
 
 Each application has its own Dockerfile and README. Each README includes instructions on manually building the Docker image for that app in case 
 you wish to debug or explore the application locally.

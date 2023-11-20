@@ -10,14 +10,14 @@ team in order to ease getting started with high-scale use cases for Pinecone's h
 ![Pinecone AWS Reference Architecture](./docs/aws-ref-arch-pulumi.png)
 
 # Table of contents
-* [Introduction]('#introduction')
-* [Getting started]('#getting-started')
+* [Introduction](#introduction)
+* [Getting started](#getting-started)
 * [Detailed setup instructions](./docs/setup.md)
 * [Architecture overview](./docs/architecture.md)
 * [Common tasks](./docs/common-tasks.md)
 * [Troubleshooting and FAQs](./docs/troubleshooting-and-faq.md)
 * [Contribution guidelines](./docs/contributing.md)
-* [License]()
+* [License](#license)
 
 # Getting started: 
 
@@ -56,8 +56,6 @@ team in order to ease getting started with high-scale use cases for Pinecone's h
         * `PINECONE_API_KEY` 
         * `PINECONE_ENVIRONMENT` 
         * `PINECONE_INDEX`
-        * `AWS_REGION`
-        * `POSTGRES_DB_PASSWORD`
 
 7. **Initialize and Run Pulumi Stack**
 
