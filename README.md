@@ -13,6 +13,7 @@ team in order to ease getting started with high-scale use cases for Pinecone's h
 * [Introduction](#introduction)
 * [Getting started](#getting-started)
 * [Detailed setup instructions](./docs/setup.md)
+* [Core concepts](./docs/core-concepts.md)
 * [Architecture overview](./docs/architecture.md)
 * [Common tasks](./docs/common-tasks.md)
 * [Troubleshooting and FAQs](./docs/troubleshooting-and-faq.md)
