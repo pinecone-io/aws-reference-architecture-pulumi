@@ -1,5 +1,7 @@
 # Architecture Overview 
 
+![Pinecone AWS Reference Architecture](./docs/aws-ref-arch-pulumi.png)
+
 The Pinecone AWS Reference Architecture, implemented using Pulumi, is a comprehensive cloud solution designed to orchestrate, deploy, and manage various components within the AWS ecosystem efficiently. The architecture leverages AWS services and Pulumi's Infrastructure as Code (IaC) capabilities to create a robust and scalable environment.
 Core Components
 
