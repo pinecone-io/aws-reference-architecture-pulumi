@@ -2,7 +2,7 @@
 
 # Jump host
 
-![a Jump host for accessing private resources](./docs/jumphost.png)
+![a Jump host for accessing private resources](./jumphost.png)
 
 This document contains instructions for common tasks when working with the AWS Reference Architecture. 
 
@@ -20,11 +20,11 @@ has access to private resources.
 At a high-level, this involves launching a new EC2 instance into the public subnet and granting its security group access to the RDS Database by adding an inbound 
 rule allowing traffic from the jump host's security group into the RDS Postgres database's security group. 
 
-![Launch an EC2 instance as a jump host](./docs/jumphost-launch-instance.png)
+![Launch an EC2 instance as a jump host](./jumphost-launch-instance.png)
 
 On the EC2 dashboard, choose Launch an instance. Choose the default Amazon Linux flavor as well as the recommended Amazon Machine Image (AMI).
 
-![Configure your jump host](./docs/jumphost-configure-2.png)
+![Configure your jump host](./jumphost-configure-2.png)
 
 Ensure that your jump host: 
 1. will be launched into the same VPC that your Reference Architecture deployed
@@ -32,7 +32,7 @@ Ensure that your jump host:
 1. will automatically have a public IPv4 address assigned to it
 1. will be launched into a new security group. You can accept the default suggestion for the name
 
-![Continue configuring your jump host](./docs/jumphost-network-configure-3.png)
+![Continue configuring your jump host](./jumphost-network-configure-3.png)
 
 Create a new SSH keypair, if you don't already have one, and chose `.pem` format. 
 
@@ -43,7 +43,7 @@ your downloads folder, and run the following command to ensure the correct permi
 
 Launch your instance and wait a few moments for its status to change to Available: 
 
-![Launch your jump host](./docs/jumphost-launch-instance.png)
+![Launch your jump host](./jumphost-launch-instance.png)
 
 Ensure your SSH configuration is working properly by connecting to your jump host over ssh: 
 
@@ -58,13 +58,13 @@ The RDS Postgres database is running in its own security group. By design, this 
 In order to allow your jump host to access the Postgres RDS database directly, in order to give yourself direct access via 
 tools like `psql`, you must first look up the ID of the security group that was created for your jump host when you launched it: 
 
-![Look up your jump host's security group](./docs/jumphost-security-group-lookup-5.png)
+![Look up your jump host's security group](./jumphost-security-group-lookup-5.png)
 
 Once you know the ID of your jump host's security group, go to the EC2 dashboard > Security groups and find the RDS Security group. 
 
 Edit the RDS security group and add a new inbound rule. For the protocol, set `PostgreSQL` which automatically allows access via port 5432.
 
-![Expand the RDS security group inbound rules](./docs/jumphost-expand-rds-security-group-6.png)
+![Expand the RDS security group inbound rules](./jumphost-expand-rds-security-group-6.png)
 
 ## Install the Postgres client on the jump host 
 

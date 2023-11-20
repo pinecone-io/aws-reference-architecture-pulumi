@@ -30,7 +30,7 @@ team in order to ease getting started with high-scale use cases for Pinecone's h
 3. **Install Pulumi CLI**
 
     * Download and [install the Pulumi CLI](https://www.pulumi.com/docs/install/).
-    * Link GitHub Account: Complete your Pulumi account setup using your GitHub account.
+    * Link GitHub Account: [Complete your Pulumi account setup](https://app.pulumi.com/) using your GitHub account.
 
 4. **Configure Pulumi**
 
@@ -77,8 +77,7 @@ team in order to ease getting started with high-scale use cases for Pinecone's h
 
 # License 
 
-The Pinecone AWS Reference Architecture is licensed under the Apache 2.0 license.
+The Pinecone AWS Reference Architecture is licensed under [the Apache 2.0 license](./LICENSE).
 
 # Contact and Support 
-
 
