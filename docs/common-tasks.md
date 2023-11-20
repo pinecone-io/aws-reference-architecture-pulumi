@@ -2,6 +2,12 @@
 
 This document contains instructions for common tasks when working with the AWS Reference Architecture. 
 
+# Table of contents 
+
+* [Jump host](#jump-host)
+* [Load testing the RefArch](#load-testing-the-refarch)
+* [Destroying the RefArch](#destroying-the-refarch)
+
 # Jump host
 
 <img alt="jump host" src="./jumphost.png" width="500" />
@@ -11,7 +17,7 @@ This document contains instructions for common tasks when working with the AWS R
 For security reasons, the Reference Architecture's VPC divides resources into public and private subnets. The frontend UI microservice runs in the 
 public subnet, and everything else, including the RDS Postgres database and the backend microservices, run in the private subnet.
 
-<img alt="jump host data flow" src="./jumphost-flow.png" width="500" />
+<img alt="jump host data flow" src="./jumphost-flow.png" />
 
 Resources running in the private subnets are not directly accessible via the public internet, by design. Therefore, in order to query the database directly
 or perform any other tasks that require direct access to the backend, you must connect through a "jump" or bastion host that runs in the public subnet but 
@@ -101,21 +107,26 @@ The password is the same for all users because the RDS Postgres database uses a 
 
 You should now be greeted with the `postgres =>` prompt, which will allow you to issue arbitrary SQL.
 
-## SSH to the jump host from your machine
+## Step 5. SSH to the jump host from your machine
 
 SSH: 
 `ssh -i ~/Downloads/rds-sql-bastion.pem ec2-user@54.88.236.252`
 
-## Use SCP to transfer files from your machine to the jump host 
+# Load testing the RefArch
+
+## Step 1. Generate additional Postgres records
+
+TODO
+
+## Step 2. Use SCP to transfer files from your machine to the jump host 
 
 SCP: 
 `scp -i ~/Downloads/rds-sql-bastion.pem ~/Pinecone/ref-arch-init/semantic-search-postgres/data/one_million_products.csv ec2-user@54.88.236.252:/home/ec2-user/one_million_products.csv`
 
-## Load test records into the Postgres database from the jump host 
+## Step 3. Load test records into the Postgres database from the jump host 
 
 PSQL load from Jumphost:
 `\copy products_with_increment(name, sku, description, price, last_updated) FROM './one_million_products.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
-
 
 # Destroying the RefArch 
 
