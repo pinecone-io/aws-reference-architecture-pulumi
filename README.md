@@ -59,8 +59,6 @@ team in order to ease getting started with high-scale use cases for Pinecone's h
 
 * [Read the detailed setup instructions](./docs/setup.md)
  
-## Installation guides
-
 # Architecture Overview 
 
 * [Read the Architecture Overview](./docs/architecture.md)
@@ -69,9 +67,15 @@ team in order to ease getting started with high-scale use cases for Pinecone's h
 
 # Common tasks
 
+* [Read the common tasks guide](./docs/common-tasks.md)
+
 # Troubleshooting and FAQs
 
+* [Read the troubleshooting guide](./docs/troubleshooting.md)
+
 # Contribution Guidelines
+
+* [Read the contribution guide](./docs/contributing.md)
 
 # License 
 
@@ -79,39 +83,4 @@ The Pinecone AWS Reference Architecture is licensed under the Apache 2.0 license
 
 # Contact and Support 
 
-## Running pulumi 
 
-If your AWS account credentials are configured correctly as above, you should only need to run `pulumi up` which is similar to a `terraform plan`
-followed by a `terraform apply` if you accept the plan. 
-
-Pulumi will first show you what infrastructure changes it plans to make based on the TypeScript code writen in `index.ts` and the current state of
-the resources in your AWS account. If you select the `yes` option from the dropdown in your terminal, Pulumi will attempt to make the AWS API calls
-necessary to make the changes in your AWS account.
-
-## Plan 
-
-Once we've figured out Roie's use case and have the infrastructure working properly, we'll generalize this into a generic starting point 
-that anyone can use to deploy their own Production-ready high-scale distributed system for creating embeddings and upserting them to Pinecone.
-
-## Apps
-
-The Pinecone AWS Reference Architecture is comprised of three applications (one frontend UI app and two microservices) as well as the Pinecone index 
-and the AWS infrastructure to support these: 
-
-- semantic-search-postgres (user-facing UI application which enables semantic search over a table of products)
-- pelican (microservice that listens to the RDS Postgres instance for changes and puts changes on the SQS jobs queue)
-- emu (microservice that takes jobs off the SQS queue and embeds and upserts their contents into the Pinecone index)
-
-Each application has its own Dockerfile and README. Each README includes instructions on manually building the Docker image for that app in case 
-you wish to debug or explore the application locally.
-
-## Docker images 
-
-When you run `pulumi up`, Pulumi takes care of programmatically building the Docker images for each app and pushing them to their respective ECR container repository. 
-
-Pulumi handles authentication under the hood, so you do not need to manually authenticate to ECR repositories to push the Docker images.
-
-
-## Issues and contributions
-
-If you encounter any issues with the AWS Reference Architecture, please [file an issue against the repo](https://github.com/pinecone-io/ref-arch-init/issues/new).

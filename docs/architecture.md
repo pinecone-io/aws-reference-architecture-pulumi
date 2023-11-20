@@ -37,3 +37,22 @@ Core Components
 1. **Deployment and Management with Pulumi:**
     * Infrastructure as Code: The entire infrastructure, from network configuration to service deployment, is defined and managed through Pulumi code, providing a repeatable and version-controlled deployment process.
     * Exports and Outputs: Key information such as service URLs, database addresses, and queue IDs are exported for easy access and reference.
+
+
+## Apps
+
+The Pinecone AWS Reference Architecture is comprised of three applications (one frontend UI app and two microservices) as well as the Pinecone index 
+and the AWS infrastructure to support these: 
+
+- semantic-search-postgres (user-facing UI application which enables semantic search over a table of products)
+- pelican (microservice that listens to the RDS Postgres instance for changes and puts changes on the SQS jobs queue)
+- emu (microservice that takes jobs off the SQS queue and embeds and upserts their contents into the Pinecone index)
+
+Each application has its own Dockerfile and README. Each README includes instructions on manually building the Docker image for that app in case 
+you wish to debug or explore the application locally.
+
+## Docker images 
+
+When you run `pulumi up`, Pulumi takes care of programmatically building the Docker images for each app and pushing them to their respective ECR container repository. 
+
+Pulumi handles authentication under the hood, so you do not need to manually authenticate to ECR repositories to push the Docker images.
