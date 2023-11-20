@@ -2,7 +2,7 @@
 
 # Jump host
 
-![a Jump host for accessing private resources](./jumphost.png)
+![a Jump host for accessing private resources](./jumphost.png | width=50)
 
 This document contains instructions for common tasks when working with the AWS Reference Architecture. 
 
