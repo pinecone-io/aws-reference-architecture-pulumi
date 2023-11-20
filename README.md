@@ -9,6 +9,16 @@ team in order to ease getting started with high-scale use cases for Pinecone's h
 
 ![Pinecone AWS Reference Architecture](./docs/aws-ref-arch-pulumi.png)
 
+# Table of contents
+* [Introduction]('#introduction')
+* [Getting started]('#getting-started')
+* [Detailed setup instructions](./docs/setup.md)
+* [Architecture overview](./docs/architecture.md)
+* [Common tasks](./docs/common-tasks.md)
+* [Troubleshooting and FAQs](./docs/troubleshooting-and-faq.md)
+* [Contribution guidelines](./docs/contributing.md)
+* [License]()
+
 # Getting started: 
 
 ## Prerequisites
@@ -55,29 +65,6 @@ team in order to ease getting started with high-scale use cases for Pinecone's h
     * Deploy Resources: Execute `pulumi up` to start the deployment.
     * Review and Confirm: Review the Pulumi preview of resources to be created. Confirm by selecting `Yes` to proceed.
 
-# Detailed Setup Instructions
-
-* [Read the detailed setup instructions](./docs/setup.md)
- 
-# Architecture Overview 
-
-* [Read the Architecture Overview](./docs/architecture.md)
-
-# Common tasks
-
-* [Read the common tasks guide](./docs/common-tasks.md)
-
-# Troubleshooting and FAQs
-
-* [Read the troubleshooting guide](./docs/troubleshooting-and-faq.md)
-
-# Contribution Guidelines
-
-* [Read the contribution guide](./docs/contributing.md)
-
 # License 
 
 The Pinecone AWS Reference Architecture is licensed under [the Apache 2.0 license](./LICENSE).
-
-# Contact and Support 
-
