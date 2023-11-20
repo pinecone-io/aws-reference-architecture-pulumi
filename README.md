@@ -63,15 +63,13 @@ team in order to ease getting started with high-scale use cases for Pinecone's h
 
 * [Read the Architecture Overview](./docs/architecture.md)
 
-# Running Pulumi 
-
 # Common tasks
 
 * [Read the common tasks guide](./docs/common-tasks.md)
 
 # Troubleshooting and FAQs
 
-* [Read the troubleshooting guide](./docs/troubleshooting.md)
+* [Read the troubleshooting guide](./docs/troubleshooting-and-faq.md)
 
 # Contribution Guidelines
 
