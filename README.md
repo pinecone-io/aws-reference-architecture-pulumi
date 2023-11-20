@@ -54,9 +54,9 @@ team in order to ease getting started with high-scale use cases for Pinecone's h
 6. **Set Environment Variables**
 
     * Ensure the following environment variables are set: 
-        * `PINECONE_API_KEY` 
-        * `PINECONE_ENVIRONMENT` 
-        * `PINECONE_INDEX`
+        * `PINECONE_API_KEY` (From your Pinecone account at https://app.pinecone.io)
+        * `PINECONE_ENVIRONMENT` (From your Pinecone account at https://app.pinecone.io)
+        * `PINECONE_INDEX` (You don't need to actually create this index. If it doesn't exist, the RefArch will automatically provision it)
 
 7. **Initialize and Run Pulumi Stack**
 
