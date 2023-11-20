@@ -1,21 +1,23 @@
 # Common tasks 
 
+This document contains instructions for common tasks when working with the AWS Reference Architecture. 
+
 # Jump host
 
 <img alt="jump host" src="./jumphost.png" width="500" />
-
-This document contains instructions for common tasks when working with the AWS Reference Architecture. 
 
 ## Use a Jump host to access resources running in the private subnet 
 
 For security reasons, the Reference Architecture's VPC divides resources into public and private subnets. The frontend UI microservice runs in the 
 public subnet, and everything else, including the RDS Postgres database and the backend microservices, run in the private subnet.
 
+<img alt="jump host data flow" src="./jumphost-flow.png" width="500" />
+
 Resources running in the private subnets are not directly accessible via the public internet, by design. Therefore, in order to query the database directly
 or perform any other tasks that require direct access to the backend, you must connect through a "jump" or bastion host that runs in the public subnet but 
 has access to private resources. 
 
-## Provision the jump host
+## Step 1. Provision the jump host
 
 At a high-level, this involves launching a new EC2 instance into the public subnet and granting its security group access to the RDS Database by adding an inbound 
 rule allowing traffic from the jump host's security group into the RDS Postgres database's security group. 
@@ -49,13 +51,13 @@ Ensure your SSH configuration is working properly by connecting to your jump hos
 
 `ssh -i ~/Downloads/<your-private-key>.pem ec2-user@<your-jumphost-public-ipv4-address>`
 
-## Grant your jump host access to resources running in the backend
+## Step 2. Grant your jump host access to resources running in the backend
 
 The RDS Postgres database is running in its own security group. By design, this security group only grants access to: 
 1. the frontend microservice's security group, because the frontend issues database queries
 1. the pelican microservice's security group, because Pelican listens to the Postgres database for changes
 
-In order to allow your jump host to access the Postgres RDS database directly, in order to give yourself direct access via 
+In order to allow your jump host to access the Postgres RDS database directly, to give yourself direct access via 
 tools like `psql`, you must first look up the ID of the security group that was created for your jump host when you launched it: 
 
 ![Look up your jump host's security group](./jumphost-security-group-lookup-5.png)
@@ -66,19 +68,38 @@ Edit the RDS security group and add a new inbound rule. For the protocol, set `P
 
 ![Expand the RDS security group inbound rules](./jumphost-expand-rds-security-group-6.png)
 
-## Install the Postgres client on the jump host 
+Once you save the RDS Postgres security group's inbound rules, your jump host should have access to the RDS Postgres database, allowing you to 
+run commands from an SSH session to your jump host. 
 
-On box, install `psql`: 
+## Step 3. Install the Postgres client on the jump host 
+
+SSH to your jump host: 
+
+`ssh -i ~/Downloads/<path-to-your-ssh-private-key>.pem ec2-user@<your-jump-host-ipv4-address>`
+
+Next, search for the latest PostgreSQL package using the `yum` package manager: 
+
+```bash
 sudo yum update
 sudo yum search "postgres"
+```
 
-Find the latest package, for example at the time of writing: 
+Find and install the latest PostgreSQL package, (for example at the time of writing): 
 `sudo yum install -y postgresql15.x86_64`
 
-## Connect to the Postgres database from the jump host 
+## Step 4. Connect to the Postgres database from the jump host 
 
-PSQL connect: 
+Visit the RDS page in the AWS console. Find the RDS Postgres database and copy it's hostname from the overview panel: 
+
+Here's an example command for connecting from your jump host to your RDS Postgres database:
+
 `psql -h mydb0e0dbc2.c4ztncw5rxvr.us-east-1.rds.amazonaws.com -U postgres`
+
+If everything worked, you'll next be prompted for the password, which is `AVNS_UhAVnXgK9zFnxOH1-Hj`.
+
+The password is the same for all users because the RDS Postgres database uses a public snapshot that already has the password configured. 
+
+You should now be greeted with the `postgres =>` prompt, which will allow you to issue arbitrary SQL.
 
 ## SSH to the jump host from your machine
 
@@ -89,7 +110,6 @@ SSH:
 
 SCP: 
 `scp -i ~/Downloads/rds-sql-bastion.pem ~/Pinecone/ref-arch-init/semantic-search-postgres/data/one_million_products.csv ec2-user@54.88.236.252:/home/ec2-user/one_million_products.csv`
-
 
 ## Load test records into the Postgres database from the jump host 
 
