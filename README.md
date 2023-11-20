@@ -17,6 +17,7 @@ team in order to ease getting started with high-scale use cases for Pinecone's h
 * [Architecture overview](./docs/architecture.md)
 * [Common tasks](./docs/common-tasks.md)
 * [Troubleshooting and FAQs](./docs/troubleshooting-and-faq.md)
+* [Code of conduct](./docs/code-of-conduct.md)
 * [Contribution guidelines](./docs/contributing.md)
 * [License](#license)
 
