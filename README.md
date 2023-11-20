@@ -12,9 +12,9 @@ team in order to ease getting started with high-scale use cases for Pinecone's h
 # Getting started: 
 
 ## Prerequisites
-* AWS account 
-* Free Pinecone account
-* Free Pulumi account 
+* [AWS account](https://aws.amazon.com/console/)
+* [Free Pinecone account](https://app.pinecone.io)
+* [Free Pulumi account](https://app.pulumi.com/)
 
 ## Quick start guide 
 1. **Set Up AWS IAM User**
