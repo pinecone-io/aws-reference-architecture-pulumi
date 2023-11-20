@@ -4,6 +4,7 @@ This document explains core concepts and functionality within the Pinecone AWS R
 
 # Table of contents 
 * [Initial data bootstrapping flow](#initial-data-bootstrapping-flow)
+* [Autoscaling](#autoscaling)
 
 ## Initial data bootstrapping flow
 
@@ -39,3 +40,34 @@ It allows the architecture to support ambiguous natural language queries from us
 in RDS Postgres. 
 
 This synchronization ensures that users can retrieve accurate and relevant results from their searches, enhancing the overall utility and user experience of the system.
+
+## Autoscaling 
+
+<img alt="Autoscaling Pelican and Emu" src="./autoscaling-concept.png" width="500" />
+
+The Pinecone AWS Reference Architecture defines autoscaling policies for Pelican and Emu, the two microservices that write to, and read from, the shared SQS queue respectively. 
+
+Pelican is the microservice that reads records out of Postgres and writes them to the SQS queue. It has an attached autoscaling policy configured to keep the Pelican ECS service's 
+average CPU at a certain amount. There are also minimum and maximum counts defined for Pelican workers on the policy. 
+
+Emu is the microservice that reads changed Postgres records off the shared SQS queue and converts their description fields to embeddings, then upserts the vectors to Pinecone, attaching metadata
+that associates the vector with the original Postgres record (by storing its Postgres ID). It also has an attached autoscaling policy configured to keep the Emu ECS service's 
+average CPU at a certain amount. There are also minimum and maximum counts defined for Emu workers on the policy. 
+
+Generally speaking, you will need less Pelican workers than Emu workers, because Pelican's task of reading messages out of Postgres and writing them to the SQS queue is less resource intensive than 
+Emu's task of converting the natural language descriptions of products into embeddings and upserting them via the Pinecone API. 
+
+Pelican also supports an environment variable, `BATCH_SIZE` which determines the number of Postgres records each Pelican worker will `select` when it is retrieving a segment of records to loop through 
+and place on the queue. Once the full Reference Architecture is successfully deployed, you can modify this variable and then run `pulumi up` in order to modify the value. The default value is `1000` records
+per batch if no `BATCH_SIZE` environment variable is set.
+
+### Triggers - high and low watermarks
+
+The autoscaling policies for Pelican and Emu are defined at the bottom of the `index.ts` file. Though their criteria and thresholds are set differently, each autoscaling policy works in the same way: 
+
+1. When the condition for the average CPU utilization is breached - the associated CloudWatch Alarm enters the `alarm` state. You can view the CloudWatch dashboard and view the alarms themselves. 
+1. The converse "scale-in" activity for the autoscaling policy won't be triggered until enough datapoints are received that show the inverse condition has been reached. Typically, this is 15 data 
+points received over the course of 15 minutes.
+
+In other words, you'll typically notice that Pelican and Emu are relatively quick to scale-out and add more workers, but are more conservative about "scaling-in" to a lesser number of workers. 
+
