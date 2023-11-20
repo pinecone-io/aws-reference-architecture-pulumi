@@ -11,11 +11,11 @@ This document explains core concepts and functionality within the Pinecone AWS R
 
 The initial data bootstrapping phase is a crucial component of the Reference Architecture. 
 
-<img alt="RefArch data bootstrapping flow" src="./refarch-data-bootstrapping-flow.png" />
-
 This phase ensures that the Pinecone index is always in sync with the contents of the RDS Postgres database. 
 
 By maintaining this synchronization, Pinecone can effectively serve as the semantic search backend, enabling end-users to issue natural language queries that are accurately mapped to the structured data within RDS Postgres.
+
+<img alt="RefArch data bootstrapping flow" src="./refarch-data-bootstrapping-flow.png" />
 
 ### Bootstrapping process
 
