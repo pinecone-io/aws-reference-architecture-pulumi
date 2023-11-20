@@ -19,7 +19,9 @@ public subnet, and everything else, including the RDS Postgres database and the 
 
 <img alt="jump host data flow" src="./jumphost-flow.png" />
 
-Resources running in the private subnets are not directly accessible via the public internet, by design. Therefore, in order to query the database directly
+Resources running in the private subnets are not directly accessible via the public internet, by design. 
+
+Therefore, in order to query the database directly
 or perform any other tasks that require direct access to the backend, you must connect through a "jump" or bastion host that runs in the public subnet but 
 has access to private resources. 
 
@@ -114,9 +116,39 @@ SSH:
 
 # Load testing the RefArch
 
+<img alt="Load testing the RefArch" src="./load-testing-refarch.png" width="500" />
+
 ## Step 1. Generate additional Postgres records
 
-TODO
+By default, the Reference Architecture initially deploys with an RDS Postgres public snapshot that contains 10,001 fake product records, all marked as `processed = false`.
+
+This is due to the fact that an initial data bootstrapping phase must be performed where: 
+1. Pelican determines that there are unprocessed RDS Postgres records
+1. Pelican selects records in configurable batches, selecting them for update (using row-level locking to prevent other Pelican workers from having contention issues)
+1. Pelican places the records on the SQS queue and marks them as processed 
+1. Emu pulls the jobs off the queue and converts their descriptions to embeddings and upserts them as vectors with metadata tying them back to their original Postgres database records
+
+As part of load testing or while extending the Reference Architecture to your own purposes, you may wish to generate many more Postgres records in order to generate additional traffic 
+for the system to process. 
+
+There is a helper tool in `helpers/generate_records.go` that you can run to generate an arbitrary number of records in a format that the default Reference Architecture 
+expects. 
+
+If you open that file you'll find two `consts` at the top that control its behavior: 
+
+```golang
+
+const (
+	numRecords   = 1000000
+	productsFile = "one_million_products.csv"
+)
+
+```
+You can modify these two const variables to change the number of records or the destination file they'll be written to. 
+
+To run the helper and generate the records, you must [have Golang installed](https://go.dev/doc/install): 
+
+`go run generate_records.go `
 
 ## Step 2. Use SCP to transfer files from your machine to the jump host 
 
