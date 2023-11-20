@@ -2,7 +2,7 @@
 
 # Jump host
 
-![a Jump host for accessing private resources](./jumphost.png | width=50)
+<img alt="jump host" src="./jumphost.png" height="50%" />
 
 This document contains instructions for common tasks when working with the AWS Reference Architecture. 
 
