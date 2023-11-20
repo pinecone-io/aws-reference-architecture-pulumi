@@ -6,6 +6,7 @@ This document contains instructions for common tasks when working with the AWS R
 
 * [Jump host](#jump-host)
 * [Load testing the RefArch](#load-testing-the-refarch)
+* [TODO: Tweaking and tuning autoscaling behavior](#autoscaling)
 * [Destroying the RefArch](#destroying-the-refarch)
 
 # Jump host
@@ -159,6 +160,10 @@ SCP:
 
 PSQL load from Jumphost:
 `\copy products_with_increment(name, sku, description, price, last_updated) FROM './one_million_products.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+
+# Autoscaling
+
+TODO: This section explains how to tune the various knobs the Reference Architecture exposes for autoscaling behavior.
 
 # Destroying the RefArch 
 
