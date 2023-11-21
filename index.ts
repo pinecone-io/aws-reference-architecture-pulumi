@@ -561,7 +561,7 @@ export const pelicanServiceName = pelicanService.service.name
 const pelicanResourceId = pulumi.interpolate`service/${pelicanClusterName}/${pelicanServiceName}`;
 
 const pelicanEcsTarget = new aws.appautoscaling.Target("pelicanEcsTarget", {
-  maxCapacity: 30,
+  maxCapacity: 6,
   minCapacity: 2,
   resourceId: pelicanResourceId,
   scalableDimension: "ecs:service:DesiredCount",
