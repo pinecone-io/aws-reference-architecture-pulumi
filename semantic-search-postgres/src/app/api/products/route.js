@@ -1,7 +1,9 @@
 import { Pinecone } from '@pinecone-database/pinecone'
-import { query } from '@/utils/db';
+import { query } from '../../../utils/db'
 import PipelineSingleton from './pipeline.js';
 import { NextResponse } from 'next/server'
+import logger from '../../logger';
+import worker_id from '../../workerIdSingleton'
 
 const pinecone = new Pinecone({
   apiKey: process.env.PINECONE_API_KEY,
@@ -13,6 +15,13 @@ async function handler(req) {
   const { searchTerm, currentPage } = await req.json();
 
   console.log(`searchTerm: ${searchTerm}, currentPage: ${currentPage}`);
+
+  logger.info({
+    message: "Products route hit",
+    service: "frontend",
+    worker_id,
+    action: "products_route_handler",
+  });
 
   const offset = currentPage > 1 ? (currentPage - 1) * limit : 0;
 
@@ -35,8 +44,13 @@ async function handler(req) {
 
   const embeddedSearchTerm = await classifier(searchTerm, { pooling: 'mean', normalize: true })
 
-  console.log(`embeddedSearchTerm: %o`, embeddedSearchTerm)
-  console.log(`embeddedSearchTerm.data: %o`, embeddedSearchTerm.data)
+  logger.info({
+    message: "Search term converted to embedding",
+    service: "frontend",
+    embeddedSearchTerm,
+    worker_id,
+    action: "search_term_embedded",
+  });
 
   const result = await namespace.query({
     vector: Array.from(embeddedSearchTerm.data),
@@ -44,12 +58,26 @@ async function handler(req) {
     includeMetadata: true
   });
 
-  console.log(`result: %o`, result);
-  console.log(`length of matches in Pinecone: ${result.matches.length}`)
+  logger.info({
+    message: "Pinecone query results received",
+    result,
+    length: result.matches.length,
+    service: "frontend",
+    worker_id,
+    action: "pinecone_query_results",
+  });
 
   const ids = result ? result.matches?.map((match) => match.metadata?.id) : [];
 
   console.log(`ids before query: ${ids}`)
+
+  logger.info({
+    message: "Filtered Postgres Ids from Pinecone results metadata",
+    ids,
+    service: "frontend",
+    worker_id,
+    action: "postgres_ids_filtered",
+  });
 
   const productsQuery = `
     SELECT * FROM products_with_increment
@@ -57,11 +85,15 @@ async function handler(req) {
     LIMIT ${limit} OFFSET ${offset}    
   `;
 
-  console.log(`products query: ${productsQuery}`);
+  logger.info({
+    message: "Products query formed",
+    productsQuery,
+    service: "frontend",
+    worker_id,
+    action: "products_query_formed",
+  });
 
   const products = await query(productsQuery);
-
-  //console.log(products.rows);
 
   return NextResponse.json(products.rows);
 }
