@@ -409,6 +409,15 @@ const alb = new awsx.lb.ApplicationLoadBalancer("alb", {
 //   port: 80,
 //   targetGroup: targetGroup,
 // });
+//
+
+/** 
+ * CloudWatch log groups
+ * 
+ */
+const pelicanLogGroup = new aws.cloudwatch.LogGroup("pelicanLogGroup", {});
+const emuLogGroup = new aws.cloudwatch.LogGroup("emuLogGroup", {});
+const frontendLogGroup = new aws.cloudwatch.LogGroup("frontendLogGroup", {});
 
 const pelicanCluster = new aws.ecs.Cluster("pelican-cluster", {});
 
@@ -435,6 +444,14 @@ const frontendService = new awsx.ecs.FargateService("frontend-service", {
         hostPort: 3000, // May be removed, must match containerPort if present
         targetGroup: alb.defaultTargetGroup,
       }],
+      logConfiguration: {
+        logDriver: "awslogs",
+        options: {
+          "awslogs-group": frontendLogGroup.name,
+          "awslogs-region": process.env.AWS_REGION ?? "us-east-1",
+          "awslogs-stream-prefix": "frontend"
+        }
+      },
       environment: [
         { name: "HOSTNAME", value: "0.0.0.0" },
         { name: "PINECONE_API_KEY", value: process.env.PINECONE_API_KEY as string },
@@ -471,6 +488,14 @@ const pelicanService = new awsx.ecs.FargateService("pelican-service", {
       cpu: 512,
       memory: 1024,
       essential: true,
+      logConfiguration: {
+        logDriver: "awslogs",
+        options: {
+          "awslogs-group": pelicanLogGroup.name,
+          "awslogs-region": process.env.AWS_REGION ?? "us-east-1",
+          "awslogs-stream-prefix": "pelican"
+        }
+      },
       environment: [
         { name: "POSTGRES_DB_NAME", value: `postgres` },
         { name: "POSTGRES_DB_HOST", value: dbAddress.apply(a => a) },
@@ -504,12 +529,18 @@ const emuService = new awsx.ecs.FargateService("emu-service", {
     },
     container: {
       name: "emu",
-      //image: emuImage.imageUri,
-      //image: emuRepoDigest,
       image: pulumi.interpolate`${emuRepo.repositoryUrl}:latest`,
       cpu: 4096,
       memory: 8192,
       essential: true,
+      logConfiguration: {
+        logDriver: "awslogs",
+        options: {
+          "awslogs-group": emuLogGroup.name,
+          "awslogs-region": process.env.AWS_REGION ?? "us-east-1",
+          "awslogs-stream-prefix": "emu"
+        }
+      },
       environment: [
         { name: "PINECONE_API_KEY", value: process.env.PINECONE_API_KEY as string },
         { name: "PINECONE_ENVIRONMENT", value: process.env.PINECONE_ENVIRONMENT as string },
@@ -582,6 +613,73 @@ const pelicanCpuUtilizationPolicy = new aws.appautoscaling.Policy("pelicanCpuUti
     scaleOutCooldown: 30,
   },
 });
+
+/**
+ * CloudWatch dashboard
+ */
+// Define a new CloudWatch dashboard
+const refArchDashboard = pulumi.all([pelicanLogGroup.name, emuLogGroup.name]).apply(([pelicanName, emuName]) =>
+  new aws.cloudwatch.Dashboard("refArchDashboard", {
+    dashboardName: "refArchDashboard",
+    dashboardBody: JSON.stringify({
+      "widgets": [
+        {
+          "type": "log",
+          "x": 0,
+          "y": 0,
+          "width": 24,
+          "height": 6,
+          "properties": {
+            "query": `SOURCE ${pelicanName} | fields @timestamp, worker_id, @service\n| filter service = "pelican" and action = "record_write" \n| stats count(*) as records_processed by worker_id\n| sort records_processed desc\n`,
+            "region": process.env.AWS_REGION ?? "us-east-1",
+            "title": "Pelican: Postgres records processed by worker",
+            "view": "pie"
+          }
+        },
+        {
+          "type": "log",
+          "x": 0,
+          "y": 6,
+          "width": 24,
+          "height": 6,
+          "properties": {
+            "query": `SOURCE ${pelicanName} | fields @timestamp, worker_id, @service\n| filter service = \"pelican\" and action = \"record_write\" \n| stats count(*) as records_processed by worker_id\n| sort records_processed desc\n`,
+            "region": process.env.AWS_REGION ?? "us-east-1",
+            "title": "Pelican: Postgres records processed by worker",
+            "view": "table"
+          }
+        },
+        {
+          "type": "log",
+          "x": 0,
+          "y": 12,
+          "width": 24,
+          "height": 6,
+          "properties": {
+            "query": `SOURCE ${emuName} | fields @timestamp, worker_id, @service\n| filter service = \"emu\" and action = \"embedding_completed\" \n| stats count(*) as embeddings_processed by worker_id\n| sort embeddings_processed desc\n`,
+            "region": process.env.AWS_REGION ?? "us-east-1",
+            "title": "Emu: Embeddings processed by worker",
+            "view": "table"
+          }
+        },
+        {
+          "type": "log",
+          "x": 0,
+          "y": 18,
+          "width": 24,
+          "height": 6,
+          "properties": {
+            "query": `SOURCE ${emuName} | fields @timestamp, worker_id, @service\n| filter service = \"emu\" and action = \"embedding_completed\" \n| stats count(*) as embeddings_processed by worker_id\n| sort embeddings_processed desc\n`,
+            "region": process.env.AWS_REGION ?? "us-east-1",
+            "title": "Emu: Embeddings processed by worker (pie)",
+            "view": "pie"
+          }
+        }
+      ]
+    }),
+  }));
+
+export const refArchDashboardId = refArchDashboard.id
 
 /**
  * Exports
