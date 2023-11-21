@@ -45,6 +45,9 @@ RUN npm run build
 FROM base AS runner
 WORKDIR /app
 
+ENV PINECONE_API_KEY=$PINECONE_API_KEY
+ENV PINECONE_ENVIRONMENT=$PINECONE_ENVIRONMENT
+
 ENV NODE_ENV production
 # Uncomment the following line in case you want to disable telemetry during runtime.
 # ENV NEXT_TELEMETRY_DISABLED 1
@@ -66,10 +69,9 @@ ENV PORT 3000
 EXPOSE $PORT
 
 ENV HOSTNAME="0.0.0.0"
-
 # Allow the running process to write model files to the cache folder.
 # NOTE: In practice, you would probably want to pre-download the model files to avoid having to download them on-the-fly.
 RUN mkdir -p /app/node_modules/@xenova/.cache/
 RUN chmod 777 -R /app/node_modules/@xenova/
 
-CMD ["/bin/sh", "-c", "HOSTNAME=${HOSTNAME} PORT=${PORT} node server.js"]
+CMD ["/bin/sh", "-c", "HOSTNAME=${HOSTNAME} PORT=${PORT} node server.js"] 

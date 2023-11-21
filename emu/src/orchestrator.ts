@@ -10,6 +10,9 @@ import { EventEmitter } from "events";
 
 import os from "os";
 import { printProgress } from "./progressBar";
+import logger from "./logger"
+import worker_id from "./workerIdSingleton"
+
 config();
 
 const indexName = process.env.PINECONE_INDEX;
@@ -157,8 +160,21 @@ const orchestrate = async <T extends RecordMetadata>(
     mode === "serial"
       ? await embedBatchSerially<T>(inputs)
       : await embedBatchWithWorkers<T>(inputs);
-  console.log("\nCompleted embedding");
+
+  logger.info({
+    message: `Completed embedding`,
+    service: 'emu',
+    worker_id,
+    action: 'embedding_completed',
+  });
+
   if (!result || result.length === 0) {
+    logger.error({
+      message: `Embedding failed`,
+      service: 'emu',
+      worker_id,
+      action: 'embedding_failed',
+    });
     throw new Error("Embedding failed");
   }
   const batches = await createBatches<T>(result);

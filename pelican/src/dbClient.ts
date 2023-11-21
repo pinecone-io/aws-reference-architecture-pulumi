@@ -12,7 +12,10 @@ const pool = new Pool({
 });
 
 // Query function to execute database queries
-export const query = async (text: string, params?: any[]) => {
+export const query = async (
+  text: string,
+  params?: (string | number | boolean)[],
+) => {
   const client = await pool.connect();
   try {
     return await client.query(text, params);

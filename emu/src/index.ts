@@ -11,8 +11,17 @@ import {
 } from "@pinecone-database/pinecone";
 import { EmbedderInput } from "./embedder";
 import { orchestrate } from "./orchestrator";
+import logger from "./logger"
+import worker_id from "./workerIdSingleton"
 
 config();
+
+logger.info({
+  message: 'starting up',
+  service: 'emu',
+  worker_id,
+  action: 'startup',
+})
 
 const checkEnvVars = () => {
   const requiredVars = ["AWS_REGION", "SQS_QUEUE_URL"];
@@ -54,12 +63,23 @@ const deleteMessageFromQueue = async (receiptHandle: string): Promise<void> => {
   };
   const command = new DeleteMessageCommand(deleteParams);
   await client.send(command);
-  console.log(
-    `Deleted message with receipt handle: ${receiptHandle} from SQS queue`,
-  );
+  logger.info({
+    message: `Deleted message with receipt handle: ${receiptHandle} from SQS queue`,
+    service: 'emu',
+    worker_id,
+    action: 'deleted_sqs_message',
+  });
 };
 
 const pollMessages = async () => {
+
+  logger.info({
+    message: 'polling',
+    service: 'emu',
+    worker_id,
+    action: 'polling',
+  })
+
   const command = new ReceiveMessageCommand(params);
   try {
     const { Messages } = await client.send(command);
@@ -68,24 +88,45 @@ const pollMessages = async () => {
       const inputs: EmbedderInput[] = []; // Explicitly type the array as EmbedderInput[]
 
       for (const message of Messages) {
-        console.log(`Received message: %o`, message);
-        // Process message
+        logger.info({
+          message: `Received message`,
+          body: message,
+          service: 'emu',
+          worker_id,
+          action: 'received_message',
+        })
 
+
+        // Process message
         if (!message.Body) {
-          console.error("Message does not contain a body:", message);
+          logger.info({
+            message: `Message does not contain a body: ${message}`,
+            service: 'emu',
+            worker_id,
+            action: 'message_missing_body',
+          })
           continue; // Skip this message and continue with the next
         }
 
         try {
           const payload = JSON.parse(message.Body);
-          console.log(`payload: %o`, payload);
+
+          logger.info({
+            message: `Parsed payload`,
+            payload,
+            service: 'emu',
+            worker_id,
+            action: 'parsed_payload',
+          });
 
           // Ensure the payload has the expected structure before proceeding
           if (!payload.new || !payload.new.id || !payload.new.description) {
-            console.error(
-              `Payload does not contain expected properties: `,
-              payload,
-            );
+            logger.error({
+              message: `Payload does not contain expected properties: ${payload}`,
+              service: 'emu',
+              worker_id,
+              action: 'payload_missing_properties',
+            });
             continue;
           }
 
@@ -116,7 +157,6 @@ const pollMessages = async () => {
           });
 
           const mode = "serial";
-          console.log(`inputs: %o`, inputs);
           await orchestrate(inputs, mode);
 
           await deleteMessageFromQueue(message.ReceiptHandle as string);
@@ -124,14 +164,26 @@ const pollMessages = async () => {
           // Reset retryCount after successful processing
           retryCount = 0;
         } catch (jsonError) {
-          console.error("Error parsing message body:", message.Body, jsonError);
+          logger.error({
+            message: `Error parsing message body: ${message.Body}, ${jsonError}`,
+            service: 'emu',
+            worker_id,
+            action: 'error_parsing_message_body',
+          });
         }
       }
     }
 
     // Prevent an overly active loop if no messages were found
     if (!Messages || Messages.length === 0) {
-      console.log("No messages received, polling again in 1 second.");
+      //console.log("No messages received, polling again in 1 second.");
+      logger.info({
+        message: 'No messages received, polling again in 1 second.',
+        service: 'emu',
+        worker_id,
+        action: 'polling_restart',
+      })
+
       setTimeout(pollMessages, 1000); // Wait for 1 second before polling again
       return;
     }
@@ -139,7 +191,13 @@ const pollMessages = async () => {
     // Continue polling for new messages
     setImmediate(pollMessages);
   } catch (err) {
-    console.error("Error receiving messages:", err);
+    logger.error({
+      message: 'Error receiving messages',
+      err,
+      service: 'emu',
+      worker_id,
+      action: 'error_receiving_messages',
+    })
     const retryDelay = calculateExponentialBackoff(retryCount);
     retryCount++;
     setTimeout(pollMessages, retryDelay);
