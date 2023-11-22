@@ -3,8 +3,6 @@ export default function checkEnvVars() {
     "PINECONE_API_KEY",
     "PINECONE_ENVIRONMENT",
     "PINECONE_INDEX",
-    "POSTGRES_DB_PASSWORD",
-    "AWS_REGION",
   ];
 
   const missingEnvVars = requiredEnvVars.filter(
