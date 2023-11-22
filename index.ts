@@ -95,6 +95,10 @@ const emuRegistryInfo = emuRepo.registryId.apply(async id => {
 * Backend - RDS Postgres database
 */
 const targetDbPort = 5432;
+// The Reference Architecture uses a public RDS snapshot to give everyone the same checkpoint 
+// and to preload sample data into the database. For that reason, the password for the public 
+// snapshot, which contains only fake products data, is the same
+const dbSnapshotPassword = "AVNS_UhAVnXgK9zFnxOH1-Hj"
 
 const pelicanSecurityGroup = new aws.ec2.SecurityGroup("pelican-security-group", {
   vpcId: vpc.vpcId,
@@ -191,7 +195,7 @@ const db = new aws.rds.Instance("mydb", {
   allocatedStorage: 20,
   storageType: "gp2",
   username: "postgres",
-  password: process.env.POSTGRES_DB_PASSWORD,
+  password: dbSnapshotPassword,
   parameterGroupName: "default.postgres15",
   skipFinalSnapshot: true,
   vpcSecurityGroupIds: [rdsSecurityGroup.id],
@@ -226,7 +230,7 @@ const frontendImage = new docker.Image('frontend-image', {
       "POSTGRES_DB_HOST": dbAddress.apply(a => a),
       "POSTGRES_DB_PORT": targetDbPort.toString(),
       "POSTGRES_DB_USER": `${process.env.POSTGRES_DB_USER}`,
-      "POSTGRES_DB_PASSWORD": `${process.env.POSTGRES_DB_PASSWORD}`,
+      "POSTGRES_DB_PASSWORD": dbSnapshotPassword,
     },
   },
   imageName: frontendRepo.repositoryUrl,
@@ -248,7 +252,7 @@ const pelicanImage = new docker.Image("pelican-image", {
       "POSTGRES_DB_HOST": dbAddress.apply(a => a),
       "POSTGRES_DB_PORT": targetDbPort.toString(),
       "POSTGRES_DB_USER": `postgres`,
-      "POSTGRES_DB_PASSWORD": `${process.env.POSTGRES_DB_PASSWORD}`,
+      "POSTGRES_DB_PASSWORD": dbSnapshotPassword,
       "AWS_REGION": `${process.env.AWS_REGION}` || 'us-east-1',
       "SQS_QUEUE_URL": `${process.env.SQS_QUEUE_URL}`
     }
@@ -462,7 +466,7 @@ const frontendService = new awsx.ecs.FargateService("frontend-service", {
         { name: "POSTGRES_DB_HOST", value: dbAddress.apply(a => a) },
         { name: "POSTGRES_DB_PORT", value: dbPort.apply(p => p.toString()) },
         { name: "POSTGRES_DB_USER", value: dbUser.apply(u => u) },
-        { name: "POSTGRES_DB_PASSWORD", value: dbPassword.apply(p => p as unknown as string) },
+        { name: "POSTGRES_DB_PASSWORD", value: dbSnapshotPassword },
       ],
     },
   },
@@ -501,7 +505,7 @@ const pelicanService = new awsx.ecs.FargateService("pelican-service", {
         { name: "POSTGRES_DB_HOST", value: dbAddress.apply(a => a) },
         { name: "POSTGRES_DB_PORT", value: targetDbPort.toString() },
         { name: "POSTGRES_DB_USER", value: dbUser.apply(u => u) },
-        { name: "POSTGRES_DB_PASSWORD", value: dbPassword.apply(p => p as unknown as string) },
+        { name: "POSTGRES_DB_PASSWORD", value: dbSnapshotPassword },
         { name: "AWS_REGION", value: process.env.AWS_REGION ?? 'us-east-1' },
         { name: "SQS_QUEUE_URL", value: jobQueueUrl },
         { name: "BATCH_SIZE", value: process.env.BATCH_SIZE ?? "1000" },
