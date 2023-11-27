@@ -41,8 +41,8 @@ team in order to ease getting started with high-scale use cases for Pinecone's h
 
 3. **Install Pulumi CLI**
 
-    * Download and [install the Pulumi CLI](https://www.pulumi.com/docs/install/).
-    * Link GitHub Account: [Complete your Pulumi account setup](https://app.pulumi.com/) using your GitHub account.
+    * Download and [install the Pulumi CLI](https://www.pulumi.com/docs/install/?utm_source=pinecone&utm_medium=github&utm_campaign=pinecone-refarch).
+    * Link GitHub Account: [Complete your Pulumi account setup](https://app.pulumi.com/?utm_source=pinecone&utm_medium=github&utm_campaign=pinecone-refarch) using your GitHub account.
 
 4. **Configure Pulumi**
 
