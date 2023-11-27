@@ -4,7 +4,7 @@ These instructions are a more in-depth version of [our Quickstart Guide](./READM
 
 ## Install Pulumi 
 
-Follow Pulumi's [setup instructions here](https://www.pulumi.com/docs/install/)
+Follow Pulumi's [setup instructions here](https://www.pulumi.com/docs/install/?utm_source=pinecone&utm_medium=github&utm_campaign=pinecone-refarch)
 
 ## Get AWS access credentials
 
