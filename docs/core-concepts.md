@@ -3,8 +3,56 @@
 This document explains core concepts and functionality within the Pinecone AWS Reference Architecture.
 
 # Table of contents 
+* [General data flow](#data-flow)
 * [Initial data bootstrapping flow](#initial-data-bootstrapping-flow)
 * [Autoscaling](#autoscaling)
+
+## General data flow 
+
+In order to better understand the Reference Architecture and how it works, let's consider the data flow when a user views the semantic search table and edits a record within it. 
+
+First, the user visits the frontend UI, which features a search bar and a table of product results: 
+
+<img alt="The Pinecone AWS Reference Architecture frontend" src="./frontend-microservice-1.png" />
+
+The user may search through all the records in Postgres, via Pinecone, by issuing a query into the text input. 
+
+The user can also edit records directly in the table and save their changes to the product's description. 
+
+<img alt="Ref Arch data flow: editing a record" src="./refarch-edit-record-flow.png" />
+
+When a user updates a record in the table, the frontend microservice issues a SQL query to the RDS Postgres instance. 
+
+The RDS Postgres instance emits the old and new record via `pg_notify` and some custom trigger functions we've defined and codified in the public RDS snapshot 
+that the Reference Architecture uses to allow everyone to deploy it a known good state. 
+
+The Pelican microservice picks up that changed record and places it on the SQS queue. 
+
+The Emu microservice, which is constantly polling the SQS queue for jobs, picks up the changed record, converts its new description to embeddings. 
+
+The Emu microservice then converts the completed embeddings to batches. Emu also attache metadata to the vectors, which includes the original ID of the record 
+in the Postgres database - which allows us to later use this ID in SQL queries to complete the semantic search round trip. 
+
+Emu then upserts the batches to Pinecone. At this point, the Pinecone index is fully in sync with the records in Postgres, and the user of the frontend UI 
+is able to issue semantic search queries. 
+
+### Semantic search flow
+This flow is active once the initial data bootstrapping process is complete. It is the "normal mode" for the AWS Reference Architecture. 
+
+<img alt="Ref Arch semantic search flow" src="./refarch-semantic-search-flow.png" />
+
+The user's search query on the frontend is first converted into a "query vector" and sent to the Pinecone Index. Let's imagine the user types in "AI".
+
+The embedding model converts this query to an embedding, then queries Pinecone's index for the nearest neighbors. These are the Postgres records whose descriptions 
+most closely match the user's initial query **semantically**.
+
+Pinecone's index returns a list of results - each of which has metadata attached to it. The metadata contains the record's ID in Postgres. Therefore, the Frontend UI
+need only convert this array of objects to an array of IDs to query Postgres for. 
+
+The frontend microservice issues the SQL query directly to the Postgres database, and Postgres returns the records identified by the IDs to the Frontend UI for display. 
+
+In this way, Pinecone serves as an accelerating phase that first determines which records in Postgres most closely match the user's query semantically, and then allows the 
+Frontend UI to query for those specific records directly.
 
 ## Initial data bootstrapping flow
 
