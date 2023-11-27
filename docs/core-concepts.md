@@ -54,7 +54,7 @@ The Pelican microservice picks up that changed record and places it on the SQS q
 
 The Emu microservice, which is constantly polling the SQS queue for jobs, picks up the changed record, converts its new description to embeddings. 
 
-The Emu microservice then converts the completed embeddings to batches. Emu also attache metadata to the vectors, which includes the original ID of the record 
+The Emu microservice then converts the completed embeddings to batches. Emu also attaches metadata to the vectors, which includes the original ID of the record 
 in the Postgres database - which allows us to later use this ID in SQL queries to complete the semantic search round trip. 
 
 Emu then upserts the batches to Pinecone. At this point, the Pinecone index is fully in sync with the records in Postgres, and the user of the frontend UI 
