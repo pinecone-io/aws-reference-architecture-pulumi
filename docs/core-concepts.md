@@ -71,6 +71,34 @@ The `embedBatchSerially` method creates a new Embedder class, which wraps the `@
 Back in the `orchestrate` method, Emu passes the array of `PineconeRecord` to the `createBatches` helper method. The `createBatches` helper method is a generator function that creates 
 batches of records up to the Pinecone API limit of 2MB per message. `createBatches` returns the array typed `RecordMetadata` to the `orchestrate` method. 
 
+```typescript
+// Generator function to create batches of records up to 2MB
+async function* createBatches<T extends RecordMetadata>(
+  records: PineconeRecord<T>[],
+): AsyncGenerator<PineconeRecord<T>[]> {
+  const MAX_SIZE = 2 * 1024 * 1024; // 2MB
+  let chunk: PineconeRecord<T>[] = [];
+  let chunkSize = 0;
+
+  for (const record of records) {
+    const recordSize = getSizeOfRecord(record);
+
+    if (chunkSize + recordSize > MAX_SIZE) {
+      yield chunk;
+      chunk = [record];
+      chunkSize = recordSize;
+    } else {
+      chunk.push(record);
+      chunkSize += recordSize;
+    }
+  }
+
+  if (chunk.length > 0) {
+    yield chunk;
+  }
+}
+```
+
 The `orchestrate` method iterates through the batches and calls the `upsertBatch` helper method on each batch. The `upsertBatch` method uses the Pinecone API client to upsert the records 
 to the index's configured namespace. 
 
