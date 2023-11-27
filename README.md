@@ -26,7 +26,7 @@ team in order to ease getting started with high-scale use cases for Pinecone's h
 ## Prerequisites
 * [AWS account](https://aws.amazon.com/console/)
 * [Free Pinecone account](https://app.pinecone.io)
-* [Free Pulumi account](https://app.pulumi.com/)
+* [Free Pulumi account](https://app.pulumi.com/?utm_source=pinecone&utm_medium=github&utm_campaign=pinecone-refarch)
 
 ## Quick start guide 
 1. **Set Up AWS IAM User**
