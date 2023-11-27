@@ -4,6 +4,7 @@ This document explains core concepts and functionality within the Pinecone AWS R
 
 # Table of contents 
 * [Initial data bootstrapping flow](#initial-data-bootstrapping-flow)
+* [Chunking and embedding](#chunking-and-embedding)
 * [Autoscaling](#autoscaling)
 
 ## Initial data bootstrapping flow
@@ -40,6 +41,40 @@ It allows the architecture to support ambiguous natural language queries from us
 in RDS Postgres. 
 
 This synchronization ensures that users can retrieve accurate and relevant results from their searches, enhancing the overall utility and user experience of the system.
+
+## Chunking and embedding
+
+All chunking and embedding is performed by the Emu microservice, which lives in the `./emu` folder in the Reference Architecture monorepo. The Emu microservice has a method named `pollQueue` that 
+repeatedly queries SQS for jobs from the queue. 
+
+When Emu receives a message from the queue, it first performs validation on the messages to ensure that they contain the expected fields. 
+
+Emu then creates an array of type `EmbedderInput`, which represents text, an optional ID and a metadata object that needs to be converted to vectors: 
+
+```typescript
+export type EmbedderInput = {
+  id?: string;
+  text: string;
+  metadata: RecordMetadata;
+};
+```
+Every valid message that Emu receives in its polling loop is added to the `EmbedderInput` array, and each field of the metadata object for that work is 
+converted to a string. 
+
+Emu then calls its `orchestrate` method with the inputs and the processing mode, which currently defaults to `serial`. The orchestrator's job is to multiplex 
+work across the two supported methods: `embedBatchSerially` and `embedBatchWithWorkers`. At the time of this writing, only the `embedBatchSerially` method is used. 
+
+The `embedBatchSerially` method creates a new Embedder class, which wraps the `@xenova/transformers` library, and creates an array of type `PineconeRecord<T>`. 
+
+`embedBatchSerially` loops through the inputs it received, converts each input to embeddings, and then batches the completed embeddings into the `PineconeRecord` array which it returns.
+
+Back in the `orchestrate` method, Emu passes the array of `PineconeRecord` to the `createBatches` helper method. The `createBatches` helper method is a generator function that creates 
+batches of records up to the Pinecone API limit of 2MB per message. `createBatches` returns the array typed `RecordMetadata` to the `orchestrate` method. 
+
+The `orchestrate` method iterates through the batches and calls the `upsertBatch` helper method on each batch. The `upsertBatch` method uses the Pinecone API client to upsert the records 
+to the index's configured namespace. 
+
+Once processing is complete, Emu deletes the processed message from the SQS queue, so that no other worker will pick it up. 
 
 ## Autoscaling 
 
