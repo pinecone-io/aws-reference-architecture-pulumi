@@ -27,24 +27,5 @@ WORKDIR /usr/src/app
 COPY --from=builder /usr/src/app/node_modules ./node_modules
 COPY --from=builder /usr/src/app/dist ./dist
 
-# Define build arguments for environment variables
-ARG POSTGRES_DB_USER
-ARG POSTGRES_DB_HOST
-ARG POSTGRES_DB_NAME
-ARG POSTGRES_DB_PASSWORD
-ARG POSTGRES_DB_PORT
-ARG CERTIFICATE_BASE64
-ARG EMU_ENDPOINT
-
-# Set environment variables from build arguments
-ENV POSTGRES_DB_USER=$POSTGRES_DB_USER
-ENV POSTGRES_DB_HOST=$POSTGRES_DB_HOST
-ENV POSTGRES_DB_NAME=$POSTGRES_DB_NAME
-ENV POSTGRES_DB_PASSWORD=$POSTGRES_DB_PASSWORD
-ENV POSTGRES_DB_PORT=$POSTGRES_DB_PORT
-ENV CERTIFICATE_BASE64=$CERTIFICATE_BASE64
-ENV EMU_ENDPOINT=$EMU_ENDPOINT
-
 # Start the application
 CMD ["node", "dist/index.js"]
-
