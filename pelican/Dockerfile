@@ -1,5 +1,5 @@
 # Stage 1: Build the TypeScript application
-FROM node:20.0.0 AS builder
+FROM node:20.0.0-slim AS builder
 
 WORKDIR /usr/src/app
 
@@ -19,7 +19,7 @@ COPY . .
 RUN npm run build
 
 # Stage 2: Run the compiled JavaScript
-FROM node:20.0.0
+FROM node:20.0.0-slim
 
 WORKDIR /usr/src/app
 
