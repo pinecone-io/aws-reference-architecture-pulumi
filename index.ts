@@ -2,6 +2,8 @@ import * as pulumi from "@pulumi/pulumi"
 import * as docker from "@pulumi/docker";
 import * as aws from "@pulumi/aws";
 import * as awsx from "@pulumi/awsx";
+
+import { makeSsmParameterSecrets } from './secrets'
 import checkEnvVars from "./utils"
 
 // Context: see https://www.notion.so/AWS-Pinecone-Reference-Architecture-in-Pulumi-PRD-61245ccff1f040499b5e2417f92eee77
@@ -203,10 +205,10 @@ const db = new aws.rds.Instance("mydb", {
 });
 
 export const dbName = db.dbName
-export const dbAddress = db.address.apply(a => a);
-export const dbPort = db.port.apply(p => p)
-export const dbUser = db.username
-export const dbPassword = db.password.apply(p => p)
+export const dbAddress = db.address;
+export const dbPort = db.port;
+export const dbUser = db.username;
+export const dbPassword = db.password;
 
 /**
  * Docker image builds
@@ -285,57 +287,85 @@ const jobQueue = new aws.sqs.Queue("job-queue", {
 });
 
 // SQS IAM Policy granting access to send messages and get queue URL and attributes
-const sqsPolicy = new aws.iam.Policy("sqs-policy", {
-  policy: pulumi.interpolate`{
-        "Version": "2012-10-17",
-        "Statement": [{
-            "Effect": "Allow",
-            "Action": [
-                "sqs:SendMessage",
-                "sqs:GetQueueUrl",
-                "sqs:GetQueueAttributes"
-            ],
-            "Resource": "${jobQueue.arn}"
-        }]
-    }`
+const sqsPolicy = new aws.iam.Policy('sqs-policy', {
+  policy: {
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Effect: 'Allow',
+        Action: [
+          'sqs:SendMessage',
+          'sqs:GetQueueUrl',
+          'sqs:GetQueueAttributes',
+        ],
+        Resource: jobQueue.arn,
+      },
+    ],
+  },
 });
 
-const ecsTaskExecutionRole = new aws.iam.Role("ecs-task-execution-role", {
-  assumeRolePolicy: `{
-        "Version": "2012-10-17",
-        "Statement": [{
-            "Effect": "Allow",
-            "Principal": {
-                "Service": "ecs-tasks.amazonaws.com"
-            },
-            "Action": "sts:AssumeRole"
-        }]
-    }`
+const ecsTaskRole = new aws.iam.Role('ecs-task-execution-role', {
+  assumeRolePolicy: {
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Effect: 'Allow',
+        Principal: {
+          Service: 'ecs-tasks.amazonaws.com',
+        },
+        Action: 'sts:AssumeRole',
+      },
+    ],
+  },
 });
 
 new aws.iam.RolePolicyAttachment("sqs-policy-attachment", {
-  role: ecsTaskExecutionRole.name,
+  role: ecsTaskRole.name,
   policyArn: sqsPolicy.arn
 });
 
-const sqsReadAndDeletePolicy = new aws.iam.Policy("sqs-read-and-delete-policy", {
-  policy: pulumi.interpolate`{
-        "Version": "2012-10-17",
-        "Statement": [{
-            "Effect": "Allow",
-            "Action": [
-                "sqs:ReceiveMessage",
-                "sqs:DeleteMessage",
-                "sqs:GetQueueUrl",
-                "sqs:GetQueueAttributes"
-            ],
-            "Resource": "${jobQueue.arn}"
-        }]
-    }`
+const ecsExecutionRole = new aws.iam.Role("ecs-execution-role", {
+  assumeRolePolicy: {
+    Version: "2012-10-17",
+    Statement: [{
+      Effect: "Allow",
+      Principal: {
+        Service: "ecs-tasks.amazonaws.com"
+      },
+      Action: "sts:AssumeRole"
+    }]
+  }
 });
 
-const ecsEmuTaskExecutionRole = new aws.iam.Role("ecs-emu-task-execution-role", {
-  assumeRolePolicy: `{
+new aws.iam.RolePolicyAttachment("ecs-execution-policy-attachment", {
+  role: ecsExecutionRole.name,
+  policyArn: aws.iam.ManagedPolicy.AmazonECSTaskExecutionRolePolicy,
+});
+
+
+const sqsReadAndDeletePolicy = new aws.iam.Policy(
+  'sqs-read-and-delete-policy',
+  {
+    policy: {
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Effect: 'Allow',
+          Action: [
+            'sqs:ReceiveMessage',
+            'sqs:DeleteMessage',
+            'sqs:GetQueueUrl',
+            'sqs:GetQueueAttributes',
+          ],
+          Resource: jobQueue.arn,
+        },
+      ],
+    },
+  }
+);
+
+const ecsEmuTaskRole = new aws.iam.Role("ecs-emu-task-execution-role", {
+  assumeRolePolicy: {
         "Version": "2012-10-17",
         "Statement": [{
             "Effect": "Allow",
@@ -344,11 +374,11 @@ const ecsEmuTaskExecutionRole = new aws.iam.Role("ecs-emu-task-execution-role", 
             },
             "Action": "sts:AssumeRole"
         }]
-    }`
+    }
 });
 
 new aws.iam.RolePolicyAttachment("sqs-read-and-delete-policy-attachment", {
-  role: ecsEmuTaskExecutionRole.name,
+  role: ecsEmuTaskRole.name,
   policyArn: sqsReadAndDeletePolicy.arn
 });
 
@@ -405,12 +435,15 @@ const frontendService = new awsx.ecs.FargateService("frontend-service", {
     subnets: vpc.publicSubnetIds,
   },
   taskDefinitionArgs: {
+    executionRole: {
+      roleArn: ecsExecutionRole.arn,
+    },
     taskRole: {
-      roleArn: ecsTaskExecutionRole.arn,
+      roleArn: ecsTaskRole.arn,
     },
     container: {
       name: "frontend",
-      image: pulumi.interpolate`${frontendRepo.repositoryUrl}:latest`,
+      image: frontendRepoDigest,
       cpu: 512,
       memory: 1024,
       essential: true,
@@ -427,17 +460,19 @@ const frontendService = new awsx.ecs.FargateService("frontend-service", {
           "awslogs-stream-prefix": "frontend"
         }
       },
+      secrets: makeSsmParameterSecrets("frontend", ecsExecutionRole, {
+        PINECONE_API_KEY: process.env.PINECONE_API_KEY as string,
+        POSTGRES_DB_USER: dbUser,
+        POSTGRES_DB_PASSWORD: dbSnapshotPassword,
+      }),
       environment: [
         { name: "HOSTNAME", value: "0.0.0.0" },
-        { name: "PINECONE_API_KEY", value: process.env.PINECONE_API_KEY as string },
         { name: "PINECONE_ENVIRONMENT", value: process.env.PINECONE_ENVIRONMENT as string },
         { name: "PINECONE_INDEX", value: process.env.PINECONE_INDEX as string },
         { name: "POSTGRES_DB_NAME", value: 'postgres' },
         // Pass in the hostname and port of the RDS Postgres instance so the frontend knows where to find it
-        { name: "POSTGRES_DB_HOST", value: dbAddress.apply(a => a) },
+        { name: "POSTGRES_DB_HOST", value: dbAddress },
         { name: "POSTGRES_DB_PORT", value: dbPort.apply(p => p.toString()) },
-        { name: "POSTGRES_DB_USER", value: dbUser.apply(u => u) },
-        { name: "POSTGRES_DB_PASSWORD", value: dbSnapshotPassword },
       ],
     },
   },
@@ -452,14 +487,15 @@ const pelicanService = new awsx.ecs.FargateService("pelican-service", {
     subnets: vpc.privateSubnetIds,
   },
   taskDefinitionArgs: {
+    executionRole: {
+      roleArn: ecsExecutionRole.arn,
+    },
     taskRole: {
-      roleArn: ecsTaskExecutionRole.arn,
+      roleArn: ecsTaskRole.arn,
     },
     container: {
       name: "pelican",
-      //image: pelicanImage.imageUri,
-      //image: pelicanRepoDigest,
-      image: pulumi.interpolate`${pelicanRepo.repositoryUrl}:latest`,
+      image: pelicanRepoDigest,
       cpu: 512,
       memory: 1024,
       essential: true,
@@ -471,12 +507,14 @@ const pelicanService = new awsx.ecs.FargateService("pelican-service", {
           "awslogs-stream-prefix": "pelican"
         }
       },
+      secrets: makeSsmParameterSecrets("pelican", ecsExecutionRole, {
+        POSTGRES_DB_USER: dbUser,
+        POSTGRES_DB_PASSWORD: dbSnapshotPassword,
+      }),
       environment: [
         { name: "POSTGRES_DB_NAME", value: `postgres` },
-        { name: "POSTGRES_DB_HOST", value: dbAddress.apply(a => a) },
+        { name: "POSTGRES_DB_HOST", value: dbAddress },
         { name: "POSTGRES_DB_PORT", value: targetDbPort.toString() },
-        { name: "POSTGRES_DB_USER", value: dbUser.apply(u => u) },
-        { name: "POSTGRES_DB_PASSWORD", value: dbSnapshotPassword },
         { name: "AWS_REGION", value: process.env.AWS_REGION ?? 'us-east-1' },
         { name: "SQS_QUEUE_URL", value: jobQueueUrl },
         { name: "BATCH_SIZE", value: process.env.BATCH_SIZE ?? "1000" },
@@ -499,12 +537,15 @@ const emuService = new awsx.ecs.FargateService("emu-service", {
     subnets: vpc.privateSubnetIds,
   },
   taskDefinitionArgs: {
+    executionRole: {
+      roleArn: ecsExecutionRole.arn,
+    },
     taskRole: {
-      roleArn: ecsEmuTaskExecutionRole.arn,
+      roleArn: ecsEmuTaskRole.arn,
     },
     container: {
       name: "emu",
-      image: pulumi.interpolate`${emuRepo.repositoryUrl}:latest`,
+      image: emuRepoDigest,
       cpu: 4096,
       memory: 8192,
       essential: true,
@@ -516,8 +557,10 @@ const emuService = new awsx.ecs.FargateService("emu-service", {
           "awslogs-stream-prefix": "emu"
         }
       },
+      secrets: makeSsmParameterSecrets("emu", ecsExecutionRole, {
+        PINECONE_API_KEY: process.env.PINECONE_API_KEY as string,
+      }),
       environment: [
-        { name: "PINECONE_API_KEY", value: process.env.PINECONE_API_KEY as string },
         { name: "PINECONE_ENVIRONMENT", value: process.env.PINECONE_ENVIRONMENT as string },
         { name: "PINECONE_INDEX", value: process.env.PINECONE_INDEX as string },
         { name: "AWS_REGION", value: process.env.AWS_REGION ?? "us-east-1" },
