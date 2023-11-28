@@ -1,25 +1,12 @@
-import { Pinecone } from '@pinecone-database/pinecone'
 import { query } from '../../../utils/db'
 import PipelineSingleton from './pipeline.js';
 import { NextResponse } from 'next/server'
 import logger from '../../logger';
 import worker_id from '../../workerIdSingleton'
+import { getPinecone, getNamespace } from './pinecone.js';
 
 // This cannot be served at build time.
 export const dynamic = 'force-dynamic';
-
-/** @type Pinecone */
-let pinecone
-function getPinecone() {
-  if (pinecone) {
-    return pinecone;
-  }
-  pinecone = new Pinecone({
-    apiKey: process.env.PINECONE_API_KEY,
-    environment: process.env.PINECONE_ENVIRONMENT,
-  });
-  return pinecone;
-}
 
 const limit = 10;
 
@@ -41,18 +28,7 @@ async function handler(req) {
 
   const indexName = process.env.PINECONE_INDEX;
 
-  await pinecone.createIndex({
-    name: indexName,
-    dimension: 384,
-    suppressConflicts: true,
-    waitUntilReady: true,
-  });
-
-  const index = pinecone.index(indexName);
-  // Intentionally use the default namespace for Pinecone
-  // The Emu microservice correlatively upserts to the default namespace, 
-  // signified by ''
-  const namespace = index.namespace('')
+  const namespace = await getNamespace(pinecone, indexName);
 
   const classifier = await PipelineSingleton.getInstance();
 
