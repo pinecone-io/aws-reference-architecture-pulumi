@@ -1,5 +1,7 @@
 # Pinecone AWS Reference Architecture with Pulumi
 
+![Pinecone AWS Reference Architecture](./docs/pinecone-refarch-logo.png)
+
 # Introduction 
 The Pinecone AWS Reference Architecture is a distributed system that performs vector-database-enabled semantic search over Postgres records. 
 It is appropriate for use as a starting point to a more specific use case or as a learning resource. 
