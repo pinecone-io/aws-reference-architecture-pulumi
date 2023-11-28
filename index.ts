@@ -221,17 +221,6 @@ const frontendImage = new docker.Image('frontend-image', {
   build: {
     platform: "linux/amd64",
     context: "./semantic-search-postgres/",
-    dockerfile: "./semantic-search-postgres/Dockerfile",
-    args: {
-      "PINECONE_API_KEY": `${process.env.PINECONE_API_KEY}`,
-      "PINECONE_ENVIRONMENT": `${process.env.PINECONE_ENVIRONMENT}`,
-      "PINECONE_INDEX": `${process.env.PINECONE_INDEX}`,
-      "POSTGRES_DB_NAME": `postgres`,
-      "POSTGRES_DB_HOST": dbAddress.apply(a => a),
-      "POSTGRES_DB_PORT": targetDbPort.toString(),
-      "POSTGRES_DB_USER": `${process.env.POSTGRES_DB_USER}`,
-      "POSTGRES_DB_PASSWORD": dbSnapshotPassword,
-    },
   },
   imageName: frontendRepo.repositoryUrl,
   registry: frontendRegistryInfo,
@@ -246,16 +235,6 @@ const pelicanImage = new docker.Image("pelican-image", {
   build: {
     platform: "linux/amd64",
     context: "./pelican",
-    dockerfile: "./pelican/Dockerfile",
-    args: {
-      "POSTGRES_DB_NAME": `postgres`,
-      "POSTGRES_DB_HOST": dbAddress.apply(a => a),
-      "POSTGRES_DB_PORT": targetDbPort.toString(),
-      "POSTGRES_DB_USER": `postgres`,
-      "POSTGRES_DB_PASSWORD": dbSnapshotPassword,
-      "AWS_REGION": `${process.env.AWS_REGION}` || 'us-east-1',
-      "SQS_QUEUE_URL": `${process.env.SQS_QUEUE_URL}`
-    }
   },
   imageName: pelicanRepo.repositoryUrl,
   registry: registryInfo,
@@ -269,14 +248,6 @@ const emuImage = new docker.Image("emu-image", {
   build: {
     platform: "linux/amd64",
     context: "./emu",
-    dockerfile: "./emu/Dockerfile",
-    args: {
-      "PINECONE_INDEX": `${process.env.PINECONE_INDEX}`,
-      "PINECONE_API_KEY": `${process.env.PINECONE_API_KEY}`,
-      "PINECONE_ENVIRONMENT": `${process.env.PINECONE_ENVIRONMENT}`,
-      "AWS_REGION": `${process.env.AWS_REGION}` || 'us-east-1',
-      "SQS_QUEUE_URL": `${process.env.SQS_QUEUE_URL}`
-    }
   },
   imageName: emuRepo.repositoryUrl,
   registry: emuRegistryInfo,

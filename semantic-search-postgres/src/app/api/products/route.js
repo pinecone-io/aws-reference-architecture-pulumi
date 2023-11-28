@@ -5,14 +5,28 @@ import { NextResponse } from 'next/server'
 import logger from '../../logger';
 import worker_id from '../../workerIdSingleton'
 
-const pinecone = new Pinecone({
-  apiKey: process.env.PINECONE_API_KEY,
-  environment: process.env.PINECONE_ENVIRONMENT,
-});
+// This cannot be served at build time.
+export const dynamic = 'force-dynamic';
+
+/** @type Pinecone */
+let pinecone
+function getPinecone() {
+  if (pinecone) {
+    return pinecone;
+  }
+  pinecone = new Pinecone({
+    apiKey: process.env.PINECONE_API_KEY,
+    environment: process.env.PINECONE_ENVIRONMENT,
+  });
+  return pinecone;
+}
+
 const limit = 10;
 
 async function handler(req) {
   const { searchTerm, currentPage } = await req.json();
+
+  const pinecone = getPinecone();
 
   console.log(`searchTerm: ${searchTerm}, currentPage: ${currentPage}`);
 

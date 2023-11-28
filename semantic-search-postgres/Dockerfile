@@ -30,12 +30,6 @@ COPY --link  . .
 # Uncomment the following line in case you want to disable telemetry during the build.
 # ENV NEXT_TELEMETRY_DISABLED 1
 
-# TODO: this is unfortunate, but it appears that if the PINECONE_API_KEY and PINECONE_ENVIRONMENT 
-# variables are not set here, then the app build (npm run build) will fail within the container
-# because our client expects these values to at least be present
-ARG PINECONE_API_KEY
-ARG PINECONE_ENVIRONMENT
-
 RUN npm run build
 
 # If using yarn comment out above and use below instead

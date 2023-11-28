@@ -15,13 +15,6 @@ COPY pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 RUN pnpm install onnxruntime-node@1.14.0
 
-# Set the Pinecone env vars explicitly, otherwise we'll get a build error
-ARG PINECONE_API_KEY
-ARG PINECONE_ENVIRONMENT
-
-ENV PINECONE_API_KEY=$PINECONE_API_KEY
-ENV PINECONE_ENVIRONMENT=$PINECONE_ENVIRONMENT
-
 # Copy the rest of the app's source code to the working directory
 COPY . .
 
