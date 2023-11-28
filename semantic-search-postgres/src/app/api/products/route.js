@@ -71,9 +71,13 @@ async function handler(req) {
 
   const productsQuery = `
     SELECT * FROM products_with_increment
-    ${ids.length > 0 ? `WHERE id IN (${ids.map((id) => `'${id}'`).join(',')})` : ''}
-    LIMIT ${limit} OFFSET ${offset}    
+    ${ids.length > 0 ? `WHERE id IN ($1)` : ''}
+    LIMIT ${limit} OFFSET ${offset}
   `;
+  const params = [];
+  if (ids.length > 0) {
+    params.push(ids);
+  }
 
   logger.info({
     message: "Products query formed",
@@ -83,7 +87,7 @@ async function handler(req) {
     action: "products_query_formed",
   });
 
-  const products = await query(productsQuery);
+  const products = await query(productsQuery, params);
 
   return NextResponse.json(products.rows);
 }
