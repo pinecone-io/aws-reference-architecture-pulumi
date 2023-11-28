@@ -54,16 +54,25 @@ team in order to ease getting started with high-scale use cases for Pinecone's h
 
     * [Log into Pinecone's dashboard or create a free account](https://app.pinecone.io) to obtain your Pinecone API key and environment values.
 
-6. **Set Environment Variables**
+6. **Set Configuration Variables**
 
-    * Ensure the following environment variables are set: 
-        * `PINECONE_API_KEY` (From your Pinecone account at https://app.pinecone.io)
-        * `PINECONE_ENVIRONMENT` (From your Pinecone account at https://app.pinecone.io)
-        * `PINECONE_INDEX` (You don't need to actually create this index. If it doesn't exist, the RefArch will automatically provision it)
+    * Create a Pulumi stack: Run `pulumi stack init <your-stack-name>`
+
+Configure the required configuration values. Replace `$VALUE` in the command below with your Pinecone and AWS configuration.
+
+```shell
+# Currently us-east-1 is the only supported region for obtaining the database snapshot from.
+pulumi config set aws:region us-east-1
+
+# From your Pinecone account at https://app.pinecone.io
+pulumi config set --secret PINECONE_API_KEY "$PINECONE_API_KEY"
+pulumi config set PINECONE_ENVIRONMENT "$PINECONE_ENVIRONMENT"
+# The PINECONE_INDEX can be any value to create an index with that name when the app starts.
+pulumi config set PINECONE_INDEX "$PINECONE_INDEX"
+```
 
 7. **Initialize and Run Pulumi Stack**
 
-    * Initialize Stack: Run `pulumi stack init <your-stack-name>`.
     * Deploy Resources: Execute `pulumi up` to start the deployment.
     * Review and Confirm: Review the Pulumi preview of resources to be created. Confirm by selecting `Yes` to proceed.
 

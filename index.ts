@@ -4,14 +4,17 @@ import * as aws from "@pulumi/aws";
 import * as awsx from "@pulumi/awsx";
 
 import { makeSsmParameterSecrets } from './secrets'
-import checkEnvVars from "./utils"
+
+const config = new pulumi.Config();
+const AWS_REGION = aws.config.requireRegion();
+
+const PINECONE_API_KEY = config.requireSecret("PINECONE_API_KEY");
+const PINECONE_ENVIRONMENT = config.require("PINECONE_ENVIRONMENT");
+const PINECONE_INDEX = config.require("PINECONE_INDEX");
+
+const PELICAN_BATCH_SIZE = config.getNumber("PELICAN_BATCH_SIZE") ?? 1000;
 
 // Context: see https://www.notion.so/AWS-Pinecone-Reference-Architecture-in-Pulumi-PRD-61245ccff1f040499b5e2417f92eee77
-//
-
-// Sanity check that all required environment variables are defined, and error 
-// out with a helpful message about which ones are unset if not
-checkEnvVars();
 
 /**
  * Networking
@@ -456,19 +459,19 @@ const frontendService = new awsx.ecs.FargateService("frontend-service", {
         logDriver: "awslogs",
         options: {
           "awslogs-group": frontendLogGroup.name,
-          "awslogs-region": process.env.AWS_REGION ?? "us-east-1",
+          "awslogs-region": AWS_REGION,
           "awslogs-stream-prefix": "frontend"
         }
       },
       secrets: makeSsmParameterSecrets("frontend", ecsExecutionRole, {
-        PINECONE_API_KEY: process.env.PINECONE_API_KEY as string,
+        PINECONE_API_KEY: PINECONE_API_KEY,
         POSTGRES_DB_USER: dbUser,
         POSTGRES_DB_PASSWORD: dbSnapshotPassword,
       }),
       environment: [
         { name: "HOSTNAME", value: "0.0.0.0" },
-        { name: "PINECONE_ENVIRONMENT", value: process.env.PINECONE_ENVIRONMENT as string },
-        { name: "PINECONE_INDEX", value: process.env.PINECONE_INDEX as string },
+        { name: "PINECONE_ENVIRONMENT", value: PINECONE_ENVIRONMENT },
+        { name: "PINECONE_INDEX", value: PINECONE_INDEX },
         { name: "POSTGRES_DB_NAME", value: 'postgres' },
         // Pass in the hostname and port of the RDS Postgres instance so the frontend knows where to find it
         { name: "POSTGRES_DB_HOST", value: dbAddress },
@@ -503,7 +506,7 @@ const pelicanService = new awsx.ecs.FargateService("pelican-service", {
         logDriver: "awslogs",
         options: {
           "awslogs-group": pelicanLogGroup.name,
-          "awslogs-region": process.env.AWS_REGION ?? "us-east-1",
+          "awslogs-region": AWS_REGION,
           "awslogs-stream-prefix": "pelican"
         }
       },
@@ -515,9 +518,9 @@ const pelicanService = new awsx.ecs.FargateService("pelican-service", {
         { name: "POSTGRES_DB_NAME", value: `postgres` },
         { name: "POSTGRES_DB_HOST", value: dbAddress },
         { name: "POSTGRES_DB_PORT", value: targetDbPort.toString() },
-        { name: "AWS_REGION", value: process.env.AWS_REGION ?? 'us-east-1' },
+        { name: "AWS_REGION", value: AWS_REGION },
         { name: "SQS_QUEUE_URL", value: jobQueueUrl },
-        { name: "BATCH_SIZE", value: process.env.BATCH_SIZE ?? "1000" },
+        { name: "BATCH_SIZE", value: PELICAN_BATCH_SIZE.toString() },
       ],
     },
   },
@@ -553,17 +556,17 @@ const emuService = new awsx.ecs.FargateService("emu-service", {
         logDriver: "awslogs",
         options: {
           "awslogs-group": emuLogGroup.name,
-          "awslogs-region": process.env.AWS_REGION ?? "us-east-1",
+          "awslogs-region": AWS_REGION,
           "awslogs-stream-prefix": "emu"
         }
       },
       secrets: makeSsmParameterSecrets("emu", ecsExecutionRole, {
-        PINECONE_API_KEY: process.env.PINECONE_API_KEY as string,
+        PINECONE_API_KEY: PINECONE_API_KEY,
       }),
       environment: [
-        { name: "PINECONE_ENVIRONMENT", value: process.env.PINECONE_ENVIRONMENT as string },
-        { name: "PINECONE_INDEX", value: process.env.PINECONE_INDEX as string },
-        { name: "AWS_REGION", value: process.env.AWS_REGION ?? "us-east-1" },
+        { name: "PINECONE_ENVIRONMENT", value: PINECONE_ENVIRONMENT },
+        { name: "PINECONE_INDEX", value: PINECONE_INDEX },
+        { name: "AWS_REGION", value: AWS_REGION },
         { name: "SQS_QUEUE_URL", value: jobQueueUrl }
       ],
     },
@@ -649,7 +652,7 @@ const refArchDashboard = pulumi.all([pelicanLogGroup.name, emuLogGroup.name]).ap
           "height": 6,
           "properties": {
             "query": `SOURCE ${pelicanName} | fields @timestamp, worker_id, @service\n| filter service = "pelican" and action = "record_write" \n| stats count(*) as records_processed by worker_id\n| sort records_processed desc\n`,
-            "region": process.env.AWS_REGION ?? "us-east-1",
+            "region": AWS_REGION,
             "title": "Pelican: Postgres records processed by worker",
             "view": "pie"
           }
@@ -662,7 +665,7 @@ const refArchDashboard = pulumi.all([pelicanLogGroup.name, emuLogGroup.name]).ap
           "height": 6,
           "properties": {
             "query": `SOURCE ${pelicanName} | fields @timestamp, worker_id, @service\n| filter service = \"pelican\" and action = \"record_write\" \n| stats count(*) as records_processed by worker_id\n| sort records_processed desc\n`,
-            "region": process.env.AWS_REGION ?? "us-east-1",
+            "region": AWS_REGION,
             "title": "Pelican: Postgres records processed by worker",
             "view": "table"
           }
@@ -675,7 +678,7 @@ const refArchDashboard = pulumi.all([pelicanLogGroup.name, emuLogGroup.name]).ap
           "height": 6,
           "properties": {
             "query": `SOURCE ${emuName} | fields @timestamp, worker_id, @service\n| filter service = \"emu\" and action = \"embedding_completed\" \n| stats count(*) as embeddings_processed by worker_id\n| sort embeddings_processed desc\n`,
-            "region": process.env.AWS_REGION ?? "us-east-1",
+            "region": AWS_REGION,
             "title": "Emu: Embeddings processed by worker",
             "view": "table"
           }
@@ -688,7 +691,7 @@ const refArchDashboard = pulumi.all([pelicanLogGroup.name, emuLogGroup.name]).ap
           "height": 6,
           "properties": {
             "query": `SOURCE ${emuName} | fields @timestamp, worker_id, @service\n| filter service = \"emu\" and action = \"embedding_completed\" \n| stats count(*) as embeddings_processed by worker_id\n| sort embeddings_processed desc\n`,
-            "region": process.env.AWS_REGION ?? "us-east-1",
+            "region": AWS_REGION,
             "title": "Emu: Embeddings processed by worker (pie)",
             "view": "pie"
           }
