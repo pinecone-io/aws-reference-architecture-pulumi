@@ -1,5 +1,5 @@
 # Use an ARM64 compatible Node.js runtime as a parent image
-FROM node:20.0.0
+FROM node:20.0.0-slim
 
 # Set the working directory to /app-backend
 WORKDIR /app
