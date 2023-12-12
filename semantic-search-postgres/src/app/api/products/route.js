@@ -57,7 +57,7 @@ async function handler(req) {
     action: "pinecone_query_results",
   });
 
-  const ids = result ? result.matches?.map((match) => match.metadata?.id) : [];
+  const ids = result ? result.matches?.map((match) => Number(match.metadata?.id)) : [];
 
   console.log(`ids before query: ${ids}`)
 
@@ -71,7 +71,7 @@ async function handler(req) {
 
   const productsQuery = `
     SELECT * FROM products_with_increment
-    ${ids.length > 0 ? `WHERE id IN ($1)` : ''}
+    ${ids.length > 0 ? `WHERE id = ANY ($1)` : ''}
     LIMIT ${limit} OFFSET ${offset}
   `;
   const params = [];
