@@ -50,7 +50,7 @@ jobs:
         working-directory: ./pelican
     strategy:
       matrix:
-        node-version: [20.x]
+        node-version: [20.0.0]
     steps:
       - uses: actions/checkout@v3
       - name: Run frontend build with Node.js ${{ matrix.node-version }}
