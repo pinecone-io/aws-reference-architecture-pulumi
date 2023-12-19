@@ -41,6 +41,25 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - run: npm i
       - run: npm run build
+  test-pelican:
+    runs-on: ubuntu-latest
+    defaults: 
+      run: 
+        shell: bash
+        # Set the following jobs to all run in the pelican microservice directory
+        working-directory: ./pelican
+    strategy:
+      matrix:
+        node-version: [20.0.0]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run frontend build with Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+      - run: npm i -g pnpm@8.6.12
+      - run: pnpm i
+      - run: npm run test
   build-pelican:
     runs-on: ubuntu-latest
     defaults: 
