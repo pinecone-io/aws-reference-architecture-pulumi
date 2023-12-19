@@ -8,9 +8,10 @@ jobs:
   test-frontend:
     runs-on: ubuntu-latest
     defaults: 
-      shell: bash
-      # Set the following jobs to all run in the frontend microservice directory
-      working-directory: ./semantic-search-postgres
+      run: 
+        shell: bash
+        # Set the following jobs to all run in the frontend microservice directory
+        working-directory: ./semantic-search-postgres
     strategy:
       matrix:
         node-version: [20.x]
@@ -25,9 +26,10 @@ jobs:
   build-frontend:
     runs-on: ubuntu-latest
     defaults: 
-      shell: bash
-      # Set the following jobs to all run in the frontend microservice directory
-      working-directory: ./semantic-search-postgres
+      run: 
+        shell: bash
+        # Set the following jobs to all run in the frontend microservice directory
+        working-directory: ./semantic-search-postgres
     strategy:
       matrix:
         node-version: [20.x]
