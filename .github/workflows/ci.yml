@@ -60,12 +60,31 @@ jobs:
       - run: npm i -g pnpm@8.6.12
       - run: pnpm i
       - run: npm run build
+  test-emu:
+    runs-on: ubuntu-latest
+    defaults: 
+      run: 
+        shell: bash
+        # Set the following jobs to all run in the emu microservice directory
+        working-directory: ./emu
+    strategy:
+      matrix:
+        node-version: [20.0.0]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run frontend build with Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+      - run: npm i -g pnpm@8.6.12
+      - run: pnpm i
+      - run: npm run test
   build-emu:
     runs-on: ubuntu-latest
     defaults: 
       run: 
         shell: bash
-        # Set the following jobs to all run in the pelican microservice directory
+        # Set the following jobs to all run in the emu microservice directory
         working-directory: ./emu
     strategy:
       matrix:
