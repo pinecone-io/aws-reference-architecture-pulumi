@@ -1,5 +1,7 @@
 # Pinecone AWS Reference Architecture with Pulumi
 
+[![Reference Architecture tests](https://github.com/pinecone-io/aws-reference-architecture-pulumi/actions/workflows/ci.yml/badge.svg)](https://github.com/pinecone-io/aws-reference-architecture-pulumi/actions/workflows/ci.yml)
+
 ![Pinecone AWS Reference Architecture](./docs/pinecone-refarch-logo.png)
 
 # Introduction 
