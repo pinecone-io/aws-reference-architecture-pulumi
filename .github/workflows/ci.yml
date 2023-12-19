@@ -1,4 +1,4 @@
-name: Node.js CI
+name: Reference Architecture tests 
 on:
   push:
     branches: [main]
