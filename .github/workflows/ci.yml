@@ -1,0 +1,41 @@
+name: Node.js CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  test-frontend:
+    runs-on: ubuntu-latest
+    defaults: 
+      shell: bash
+      # Set the following jobs to all run in the frontend microservice directory
+      working-directory: ./semantic-search-postgres
+    strategy:
+      matrix:
+        node-version: [20.x]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run frontend tests with Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+      - run: npm i
+      - run: npm run build
+  build-frontend:
+    runs-on: ubuntu-latest
+    defaults: 
+      shell: bash
+      # Set the following jobs to all run in the frontend microservice directory
+      working-directory: ./semantic-search-postgres
+    strategy:
+      matrix:
+        node-version: [20.x]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run frontend build with Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+      - run: npm i
+      - run: npm run build
