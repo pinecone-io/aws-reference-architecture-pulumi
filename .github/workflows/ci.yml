@@ -57,7 +57,8 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: ${{ matrix.node-version }}
-      - run: npm i
+      - run: npm i -g pnpm@8.6.12
+      - run: pnpm i
       - run: npm run build
   build-emu:
     runs-on: ubuntu-latest
