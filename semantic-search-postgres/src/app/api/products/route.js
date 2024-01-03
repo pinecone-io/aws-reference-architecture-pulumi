@@ -26,9 +26,7 @@ async function handler(req) {
 
   const offset = currentPage > 1 ? (currentPage - 1) * limit : 0;
 
-  const indexName = process.env.PINECONE_INDEX;
-
-  const namespace = await getNamespace(pinecone, indexName);
+  const namespace = pinecone.index(process.env.PINECONE_INDEX).namespace('');
 
   const classifier = await PipelineSingleton.getInstance();
 
