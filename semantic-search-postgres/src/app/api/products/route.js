@@ -3,7 +3,7 @@ import PipelineSingleton from './pipeline.js';
 import { NextResponse } from 'next/server'
 import logger from '../../logger';
 import worker_id from '../../workerIdSingleton'
-import { getPinecone, getNamespace } from './pinecone.js';
+import { getPinecone } from './pinecone.js';
 
 // This cannot be served at build time.
 export const dynamic = 'force-dynamic';
@@ -15,12 +15,12 @@ async function handler(req) {
 
   const pinecone = getPinecone();
 
-  console.log(`searchTerm: ${searchTerm}, currentPage: ${currentPage}`);
-
   logger.info({
     message: "Products route hit",
     service: "frontend",
     worker_id,
+    searchTerm,
+    currentPage,
     action: "products_route_handler",
   });
 

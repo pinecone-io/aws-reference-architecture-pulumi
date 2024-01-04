@@ -21,7 +21,13 @@ jest.mock('../src/app/api/products/pipeline', () => {
 });
 
 jest.mock('../src/app/api/products/pinecone', () => ({
-  getPinecone: jest.fn().mockResolvedValue({}),
+  getPinecone: jest.fn(() => ({
+    index: jest.fn(() => ({
+      namespace: jest.fn().mockReturnValue({
+        query: jest.fn().mockResolvedValue({ matches: [] }),
+      })
+    }))
+  })),
   getNamespace: jest.fn().mockResolvedValue({
     query: jest.fn().mockResolvedValue({ matches: [] }),
   }),
