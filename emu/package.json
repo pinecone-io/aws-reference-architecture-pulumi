@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-sqs": "^3.445.0",
-    "@pinecone-database/pinecone": "^1.1.1",
+    "@pinecone-database/pinecone": "1.1.2-spruceDev.20240105000833",
     "@types/express": "^4.17.19",
     "@types/node": ">= 14",
     "@xenova/transformers": "^2.6.2",

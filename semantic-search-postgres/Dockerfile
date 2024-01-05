@@ -40,7 +40,6 @@ FROM base AS runner
 WORKDIR /app
 
 ENV PINECONE_API_KEY=$PINECONE_API_KEY
-ENV PINECONE_ENVIRONMENT=$PINECONE_ENVIRONMENT
 
 ENV NODE_ENV production
 # Uncomment the following line in case you want to disable telemetry during runtime.

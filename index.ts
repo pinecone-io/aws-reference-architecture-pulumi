@@ -6,12 +6,10 @@ import * as awsx from "@pulumi/awsx";
 import { makeSsmParameterSecrets } from './secrets'
 
 const config = new pulumi.Config();
+
 const AWS_REGION = aws.config.requireRegion();
-
 const PINECONE_API_KEY = config.requireSecret("PINECONE_API_KEY");
-const PINECONE_ENVIRONMENT = config.require("PINECONE_ENVIRONMENT");
 const PINECONE_INDEX = config.require("PINECONE_INDEX");
-
 const PELICAN_BATCH_SIZE = config.getNumber("PELICAN_BATCH_SIZE") ?? 1000;
 
 // Context: see https://www.notion.so/AWS-Pinecone-Reference-Architecture-in-Pulumi-PRD-61245ccff1f040499b5e2417f92eee77
@@ -369,15 +367,15 @@ const sqsReadAndDeletePolicy = new aws.iam.Policy(
 
 const ecsEmuTaskRole = new aws.iam.Role("ecs-emu-task-execution-role", {
   assumeRolePolicy: {
-        "Version": "2012-10-17",
-        "Statement": [{
-            "Effect": "Allow",
-            "Principal": {
-                "Service": "ecs-tasks.amazonaws.com"
-            },
-            "Action": "sts:AssumeRole"
-        }]
-    }
+    "Version": "2012-10-17",
+    "Statement": [{
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "ecs-tasks.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }]
+  }
 });
 
 new aws.iam.RolePolicyAttachment("sqs-read-and-delete-policy-attachment", {
@@ -469,8 +467,8 @@ const frontendService = new awsx.ecs.FargateService("frontend-service", {
         POSTGRES_DB_PASSWORD: dbSnapshotPassword,
       }),
       environment: [
+        { name: "AWS_REGION", value: AWS_REGION },
         { name: "HOSTNAME", value: "0.0.0.0" },
-        { name: "PINECONE_ENVIRONMENT", value: PINECONE_ENVIRONMENT },
         { name: "PINECONE_INDEX", value: PINECONE_INDEX },
         { name: "POSTGRES_DB_NAME", value: 'postgres' },
         // Pass in the hostname and port of the RDS Postgres instance so the frontend knows where to find it
@@ -564,7 +562,6 @@ const emuService = new awsx.ecs.FargateService("emu-service", {
         PINECONE_API_KEY: PINECONE_API_KEY,
       }),
       environment: [
-        { name: "PINECONE_ENVIRONMENT", value: PINECONE_ENVIRONMENT },
         { name: "PINECONE_INDEX", value: PINECONE_INDEX },
         { name: "AWS_REGION", value: AWS_REGION },
         { name: "SQS_QUEUE_URL", value: jobQueueUrl }

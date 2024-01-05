@@ -9,8 +9,8 @@ dependencies:
     specifier: ^3.445.0
     version: 3.445.0
   '@pinecone-database/pinecone':
-    specifier: ^1.1.1
-    version: 1.1.1
+    specifier: 1.1.2-spruceDev.20240105000833
+    version: 1.1.2-spruceDev.20240105000833
   '@types/express':
     specifier: ^4.17.19
     version: 4.17.19
@@ -782,18 +782,6 @@ packages:
       kuler: 2.0.0
     dev: false
 
-  /@edge-runtime/primitives@4.0.2:
-    resolution: {integrity: sha512-zIzzqvq62O0gxKv/PrfFBn2TEJtJYw6YlNyfLsWr16Lxz6bT8CB1IrfWa9vc5zsQPElP/orwZCu+x80+ihWQyQ==}
-    engines: {node: '>=16'}
-    dev: false
-
-  /@edge-runtime/types@2.2.4:
-    resolution: {integrity: sha512-w2DrfkLW4C/r5lpjsICc76qGX++sNvnN8sYeqXsTSpWInc8+3unofGsDUw4w34T7zQ7Mmcyld04qiLIrNoz+fQ==}
-    engines: {node: '>=16'}
-    dependencies:
-      '@edge-runtime/primitives': 4.0.2
-    dev: false
-
   /@esbuild/android-arm64@0.18.20:
     resolution: {integrity: sha512-Nz4rJcchGDtENV0eMKUNa6L12zz2zBDXuhj/Vjh18zGqB44Bi7MBMSXjgunJgjRhCmKOjnPuZp4Mb6OKqtMHLQ==}
     engines: {node: '>=12'}
@@ -1132,17 +1120,14 @@ packages:
       fastq: 1.15.0
     dev: true
 
-  /@pinecone-database/pinecone@1.1.1:
-    resolution: {integrity: sha512-8af+2fAAkkHC1BIe+op8Tk4YLvJYK1qM2ITuwVmFdNVcHG6oHdXlZdR8GGdOLfYSVuLf4aZid7xhjYUSBqux8Q==}
+  /@pinecone-database/pinecone@1.1.2-spruceDev.20240105000833:
+    resolution: {integrity: sha512-zktN/sl2vqsh+pMyoiK8zV7/oPXTi4QUQlbLnEyIu8XQBtHeNYSmloZX2FhBbQ0Ls9GzSwKakKd3F4xn7bjIqw==}
     engines: {node: '>=14.0.0'}
     dependencies:
-      '@edge-runtime/types': 2.2.4
       '@sinclair/typebox': 0.29.6
-      '@types/node': 18.18.5
       ajv: 8.12.0
       cross-fetch: 3.1.8(encoding@0.1.13)
       encoding: 0.1.13
-      typescript: 4.9.5
     dev: false
 
   /@protobufjs/aspromise@1.1.2:
@@ -1637,10 +1622,6 @@ packages:
   /@types/node@12.20.55:
     resolution: {integrity: sha512-J8xLz7q2OFulZ2cyGTLE1TbbZcjpno7FaN6zdJNrgAdrJ+DZzh/uFR6YrTb4C+nXakvud8Q4+rbhoIWlYQbUFQ==}
     dev: true
-
-  /@types/node@18.18.5:
-    resolution: {integrity: sha512-4slmbtwV59ZxitY4ixUZdy1uRLf9eSIvBWPQxNjhHYWEtn0FryfKpyS2cvADYXTayWdKEIsJengncrVvkI4I6A==}
-    dev: false
 
   /@types/node@20.8.6:
     resolution: {integrity: sha512-eWO4K2Ji70QzKUqRy6oyJWUeB7+g2cRagT3T/nxYibYcT4y2BDL8lqolRXjTHmkZCdJfIPaY73KbJAZmcryxTQ==}
@@ -5061,12 +5042,6 @@ packages:
       for-each: 0.3.3
       is-typed-array: 1.1.12
     dev: true
-
-  /typescript@4.9.5:
-    resolution: {integrity: sha512-1FXk9E2Hm+QzZQ7z+McJiHL4NW1F2EzMu9Nq9i3zAaGqibafqYwCVU6WyWAuyQRRzOlxou8xZSyXLEN8oKj24g==}
-    engines: {node: '>=4.2.0'}
-    hasBin: true
-    dev: false
 
   /typescript@5.1.6:
     resolution: {integrity: sha512-zaWCozRZ6DLEWAWFrVDz1H6FVXzUSfTy5FUMWsQlU8Ym5JP9eO4xkTIROFCQvhQf61z6O/G6ugw3SgAnvvm+HA==}
