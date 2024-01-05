@@ -1,7 +1,7 @@
 import { Pinecone } from "@pinecone-database/pinecone";
 import { v4 as uuidv4 } from "uuid";
 
-const pinecone = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
+const pinecone = new Pinecone({ apiKey: String(process.env.PINECONE_API_KEY) });
 
 const indexName = process.env.PINECONE_INDEX;
 const namespace = process.env.PINECONE_NAMESPACE;

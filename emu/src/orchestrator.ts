@@ -23,7 +23,7 @@ if (!indexName) {
   throw new Error("environment variable PINECONE_INDEX must be set");
 }
 
-const pinecone = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
+const pinecone = new Pinecone({ apiKey: String(process.env.PINECONE_API_KEY) });
 
 const numCPUs = os.cpus().length;
 
