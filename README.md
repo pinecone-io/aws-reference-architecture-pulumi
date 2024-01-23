@@ -63,12 +63,12 @@ team in order to ease getting started with high-scale use cases for Pinecone's h
 Configure the required configuration values. Replace `$VALUE` in the command below with your Pinecone and AWS configuration.
 
 ```shell
-# Currently us-east-1 is the only supported region for obtaining the database snapshot from.
-pulumi config set aws:region us-east-1
+# Currently us-west-2 is the only supported region for deploying the Reference Architecture to, because Pinecone Serverless
+# is in public preview and only available in some regions
+pulumi config set aws:region us-west-2
 
 # From your Pinecone account at https://app.pinecone.io
 pulumi config set --secret PINECONE_API_KEY "$PINECONE_API_KEY"
-pulumi config set PINECONE_ENVIRONMENT "$PINECONE_ENVIRONMENT"
 # The PINECONE_INDEX can be any value to create an index with that name when the app starts.
 pulumi config set PINECONE_INDEX "$PINECONE_INDEX"
 ```

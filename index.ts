@@ -238,7 +238,7 @@ const db = new aws.rds.Instance("mydb", {
 	// This RDS snapshot has the products_with_increment table already created and is populated with the data from
 	// data/products_no_ids.csv
 	snapshotIdentifier:
-		"arn:aws:rds:us-east-1:675304494746:snapshot:pinecone-aws-refarch-postgres-snapshot-v5",
+		"arn:aws:rds:us-west-2:675304494746:snapshot:pinecone-aws-refarch-postgres-snapshot-v5",
 	dbSubnetGroupName: dbSubnetGroup.name,
 	engine: "postgres",
 	engineVersion: "15.4",
