@@ -5,6 +5,7 @@
         "@types/node": "^16"
     },
     "dependencies": {
+        "@pinecone-database/pulumi": "^0.3.3",
         "@pulumi/aws": "^6.0.0",
         "@pulumi/awsx": "^2.0.0",
         "@pulumi/docker": "^4.5.0",
