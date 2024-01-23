@@ -12,7 +12,7 @@
   "dependencies": {
     "@babel/preset-react": "^7.23.3",
     "@babel/preset-typescript": "^7.23.3",
-    "@pinecone-database/pinecone": "^1.1.2-spruceDev.20240103000817",
+    "@pinecone-database/pinecone": "^2.0.0",
     "@xenova/transformers": "^2.7.0",
     "next": "^13.5.4",
     "pg": "^8.11.3",

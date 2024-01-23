@@ -1,19 +1,19 @@
-import { query } from '../../../utils/db'
-import PipelineSingleton from './pipeline.js';
-import { NextResponse } from 'next/server'
-import logger from '../../logger';
-import worker_id from '../../workerIdSingleton'
-import { getPinecone } from './pinecone.js';
+import { query } from "../../../utils/db";
+import PipelineSingleton from "./pipeline.js";
+import { NextResponse } from "next/server";
+import logger from "../../logger";
+import worker_id from "../../workerIdSingleton";
+import { getPinecone } from "./pinecone.js";
 
 // This cannot be served at build time.
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 const limit = 10;
 
 async function handler(req) {
   const { searchTerm, currentPage } = await req.json();
 
-  const pinecone = getPinecone();
+  const pinecone = await getPinecone();
 
   logger.info({
     message: "Products route hit",
@@ -26,11 +26,14 @@ async function handler(req) {
 
   const offset = currentPage > 1 ? (currentPage - 1) * limit : 0;
 
-  const namespace = pinecone.index(process.env.PINECONE_INDEX).namespace('');
+  const namespace = pinecone.index(process.env.PINECONE_INDEX).namespace("");
 
   const classifier = await PipelineSingleton.getInstance();
 
-  const embeddedSearchTerm = await classifier(searchTerm, { pooling: 'mean', normalize: true })
+  const embeddedSearchTerm = await classifier(searchTerm, {
+    pooling: "mean",
+    normalize: true,
+  });
 
   logger.info({
     message: "Search term converted to embedding",
@@ -43,7 +46,7 @@ async function handler(req) {
   const result = await namespace.query({
     vector: Array.from(embeddedSearchTerm.data),
     topK: 100,
-    includeMetadata: true
+    includeMetadata: true,
   });
 
   logger.info({
@@ -55,9 +58,11 @@ async function handler(req) {
     action: "pinecone_query_results",
   });
 
-  const ids = result ? result.matches?.map((match) => Number(match.metadata?.id)) : [];
+  const ids = result
+    ? result.matches?.map((match) => Number(match.metadata?.id))
+    : [];
 
-  console.log(`ids before query: ${ids}`)
+  console.log(`ids before query: ${ids}`);
 
   logger.info({
     message: "Filtered Postgres Ids from Pinecone results metadata",
@@ -69,7 +74,7 @@ async function handler(req) {
 
   const productsQuery = `
     SELECT * FROM products_with_increment
-    ${ids.length > 0 ? `WHERE id = ANY ($1)` : ''}
+    ${ids.length > 0 ? `WHERE id = ANY ($1)` : ""}
     LIMIT ${limit} OFFSET ${offset}
   `;
   const params = [];
@@ -90,7 +95,4 @@ async function handler(req) {
   return NextResponse.json(products.rows);
 }
 
-export {
-  handler as POST
-};
-
+export { handler as POST };

@@ -1,23 +1,23 @@
-import { Pinecone } from '@pinecone-database/pinecone';
-import logger from '../../logger';
-import worker_id from '../../workerIdSingleton'
+import { Pinecone } from "@pinecone-database/pinecone";
+import logger from "../../logger";
+import worker_id from "../../workerIdSingleton";
 
 let indexSetup = false;
-
 /** @type Pinecone */
 let pinecone;
-export function getPinecone() {
-  if (pinecone) {
-    return pinecone;
+
+export async function getPinecone() {
+  if (!pinecone) {
+    pinecone = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
   }
-  pinecone = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
-  // If the index hasn't already been set up (e.g., created if it does not already exist)
-  // then create it via the Pinecone client
+
   if (!indexSetup) {
-    setupIndex(pinecone, process.env.PINECONE_INDEX).then(() => {
-      indexSetup = true
-    })
+    indexSetup = await setupIndex(pinecone, process.env.PINECONE_INDEX);
+    if (!indexSetup) {
+      throw new Error("Failed to set up Pinecone index");
+    }
   }
+
   return pinecone;
 }
 
@@ -40,22 +40,29 @@ async function setupIndex(pinecone, indexName) {
     await pinecone.createIndex({
       name: indexName,
       dimension: 384,
-      // This option tells the client not to throw if the index already exists.
+      metric: "cosine",
+      // Don't return an error if the target Index already exists
       suppressConflicts: true,
-      // This option tells the client not to resolve the promise until the
-      // index is ready.
+      // Wait until the index is ready before returning success
       waitUntilReady: true,
-      metric: 'cosine',
-      spec: { serverless: { cloud: 'aws', region: process.env.AWS_REGION } }
+      spec: {
+        serverless: {
+          cloud: "aws",
+          region: process.env.AWS_REGION,
+        },
+      },
     });
 
+    return true;
   } catch (err) {
     logger.error({
       message: "Error creating index",
-      err,
+      err: err.message,
       service: "frontend",
       worker_id,
       action: "error_creating_index",
     });
+
+    return false;
   }
 }
