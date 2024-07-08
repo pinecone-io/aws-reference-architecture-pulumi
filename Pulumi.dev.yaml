@@ -1,5 +1,0 @@
-config:
-  aws:region: us-east-1
-  ratest:PINECONE_API_KEY:
-    secure: AAABAH7af/Ji9EcEeBvX4YApt7I5FFEFd28HN0fg4mR4jIzMZSQN/wg31MJQ4HwLXZEB83q1YjIt9Vp2O4mXkslCGDg=
-  ratest:PINECONE_INDEX: pulumi-ref-arch-3
