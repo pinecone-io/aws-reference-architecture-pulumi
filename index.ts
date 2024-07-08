@@ -22,12 +22,21 @@ const PELICAN_BATCH_SIZE = config.getNumber("PELICAN_BATCH_SIZE") ?? 1000;
  */
 
 // Allocate a new VPC with the default settings:
-const vpc = new awsx.ec2.Vpc("custom", {});
+const vpc = new awsx.ec2.Vpc("pinecone-ref-arch", {
+	// A single NAT Gateway (instead of the default of 1 per AZ) is fine:
+	natGateways: {
+		strategy: "Single"
+	}
+});
 
 // Export a few interesting fields to make them easy to use:
 export const vpcId = vpc.vpcId;
 export const vpcPrivateSubnetIds = vpc.privateSubnetIds;
 export const vpcPublicSubnetIds = vpc.publicSubnetIds;
+
+const pineconeProvider = new pinecone.Provider("pinecone-provider", {
+	APIKey: PINECONE_API_KEY
+});
 
 // Provision Pinecone index
 const pineconeIndex = new pinecone.PineconeIndex("pinecone-index", {
@@ -40,7 +49,8 @@ const pineconeIndex = new pinecone.PineconeIndex("pinecone-index", {
 			region: AWS_REGION,
 		},
 	},
-});
+}, { provider: pineconeProvider });
+
 export const output = {
 	name: pineconeIndex.name,
 };
@@ -143,15 +153,17 @@ const pelicanSecurityGroup = new aws.ec2.SecurityGroup(
 	},
 );
 
+const frontendPort = 3000;
+
 // Create a security group for the load balancer
 const lbSecurityGroup = new aws.ec2.SecurityGroup("lb-security-group", {
 	vpcId: vpc.vpcId,
 	egress: [
 		{
-			protocol: "-1",
-			fromPort: 0,
-			toPort: 0,
-			cidrBlocks: ["0.0.0.0/0"],
+			protocol: "tcp",
+			fromPort: frontendPort,
+			toPort: frontendPort,
+			cidrBlocks: [vpc.vpc.cidrBlock],
 		},
 	],
 	ingress: [
@@ -180,8 +192,8 @@ const frontendSecurityGroup = new aws.ec2.SecurityGroup(
 		ingress: [
 			{
 				protocol: "tcp",
-				fromPort: 3000,
-				toPort: 3000,
+				fromPort: frontendPort,
+				toPort: frontendPort,
 				securityGroups: [lbSecurityGroup.id],
 			},
 		],
@@ -484,9 +496,9 @@ const frontendService = new awsx.ecs.FargateService("frontend-service", {
 	cluster: frontendCluster.arn,
 	desiredCount: 2,
 	networkConfiguration: {
-		assignPublicIp: true,
+		assignPublicIp: false,
 		securityGroups: [frontendSecurityGroup.id],
-		subnets: vpc.publicSubnetIds,
+		subnets: vpc.privateSubnetIds,
 	},
 	taskDefinitionArgs: {
 		executionRole: {
@@ -771,7 +783,7 @@ export const refArchDashboardId = refArchDashboard.id;
  */
 
 // Networking
-export const frontendServiceUrl = alb.loadBalancer.dnsName;
+export const frontendServiceUrl = pulumi.interpolate`http://${alb.loadBalancer.dnsName}`;
 
 // Service URNs
 export const serviceUrn = frontendService.urn;
