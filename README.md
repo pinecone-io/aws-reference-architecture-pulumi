@@ -73,7 +73,11 @@ pulumi config set --secret PINECONE_API_KEY "$PINECONE_API_KEY"
 pulumi config set PINECONE_INDEX "$PINECONE_INDEX"
 ```
 
-7. **Initialize and Run Pulumi Stack**
+7. **Install SDK Dependencies**
+
+    * Run `pulumi install` to install the required dependencies.
+
+8. **Initialize and Run Pulumi Stack**
 
     * Deploy Resources: Execute `pulumi up` to start the deployment.
     * Review and Confirm: Review the Pulumi preview of resources to be created. Confirm by selecting `Yes` to proceed.
