@@ -276,7 +276,7 @@ const frontendImage = new docker.Image("frontend-image", {
 	imageName: frontendRepo.repositoryUrl,
 	registry: frontendRegistryInfo,
 });
-export const frontendRepoDigest = frontendImage.repoDigest;
+
 // The pelican microservice is concerned with listening for changes in the RDS Postgres
 // Database. The RDS Postgres database is configured with Postgres triggers as defined in
 // the rds_postgres_schema.sql file in the root of this project
@@ -290,7 +290,6 @@ const pelicanImage = new docker.Image("pelican-image", {
 	imageName: pelicanRepo.repositoryUrl,
 	registry: registryInfo,
 });
-export const pelicanRepoDigest = pelicanImage.repoDigest;
 
 // Emu is the EMbedding and Upsert (Emu) service, which handles converting the
 // changed records and product descriptions in to embeddings and upserting them
@@ -303,7 +302,6 @@ const emuImage = new docker.Image("emu-image", {
 	imageName: emuRepo.repositoryUrl,
 	registry: emuRegistryInfo,
 });
-export const emuRepoDigest = emuImage.repoDigest;
 
 // Frontend UI ECS Service
 // This is the user-facing UI service, so it is available to the public internet
@@ -496,7 +494,7 @@ const frontendService = new awsx.ecs.FargateService("frontend-service", {
 		},
 		container: {
 			name: "frontend",
-			image: frontendRepoDigest,
+			image: frontendImage.repoDigest,
 			cpu: 512,
 			memory: 1024,
 			essential: true,
@@ -550,7 +548,7 @@ const pelicanService = new awsx.ecs.FargateService("pelican-service", {
 		},
 		container: {
 			name: "pelican",
-			image: pelicanRepoDigest,
+			image: pelicanImage.repoDigest,
 			cpu: 512,
 			memory: 1024,
 			essential: true,
@@ -600,7 +598,7 @@ const emuService = new awsx.ecs.FargateService("emu-service", {
 		},
 		container: {
 			name: "emu",
-			image: emuRepoDigest,
+			image: emuImage.repoDigest,
 			cpu: 4096,
 			memory: 8192,
 			essential: true,
