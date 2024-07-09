@@ -29,11 +29,6 @@ const vpc = new awsx.ec2.Vpc("pinecone-ref-arch", {
 	}
 });
 
-// Export a few interesting fields to make them easy to use:
-export const vpcId = vpc.vpcId;
-export const vpcPrivateSubnetIds = vpc.privateSubnetIds;
-export const vpcPublicSubnetIds = vpc.publicSubnetIds;
-
 const pineconeProvider = new pinecone.Provider("pinecone-provider", {
 	APIKey: PINECONE_API_KEY
 });
@@ -50,10 +45,6 @@ const pineconeIndex = new pinecone.PineconeIndex("pinecone-index", {
 		},
 	},
 }, { provider: pineconeProvider });
-
-export const output = {
-	name: pineconeIndex.name,
-};
 
 /**
  * Elastic Container Registry (ECR) repositories
@@ -226,7 +217,7 @@ const rdsSecurityGroup = new aws.ec2.SecurityGroup("rds-security-group", {
 });
 
 const dbSubnetGroup = new aws.rds.SubnetGroup("db-subnet-group", {
-	subnetIds: vpcPrivateSubnetIds,
+	subnetIds: vpc.privateSubnetIds,
 });
 
 const emuSecurityGroup = new aws.ec2.SecurityGroup("emu-security-group", {
@@ -265,11 +256,8 @@ const db = new aws.rds.Instance("mydb", {
 	port: targetDbPort,
 });
 
-export const dbName = db.dbName;
-export const dbAddress = db.address;
-export const dbPort = db.port;
-export const dbUser = db.username;
-export const dbPassword = db.password;
+const dbPort = db.port;
+const dbUser = db.username;
 
 /**
  * Docker image builds
@@ -448,8 +436,7 @@ new aws.iam.RolePolicyAttachment("sqs-read-and-delete-policy-attachment", {
 	policyArn: sqsReadAndDeletePolicy.arn,
 });
 
-export const jobQueueId = jobQueue.id;
-export const jobQueueUrl = jobQueue.url;
+const jobQueueUrl = jobQueue.url;
 
 /**
  * Frontend application ECS service and networking
@@ -539,8 +526,8 @@ const frontendService = new awsx.ecs.FargateService("frontend-service", {
 				{ name: "PINECONE_INDEX", value: PINECONE_INDEX },
 				{ name: "POSTGRES_DB_NAME", value: "postgres" },
 				// Pass in the hostname and port of the RDS Postgres instance so the frontend knows where to find it
-				{ name: "POSTGRES_DB_HOST", value: dbAddress },
-				{ name: "POSTGRES_DB_PORT", value: dbPort.apply((p) => p.toString()) },
+				{ name: "POSTGRES_DB_HOST", value: db.address },
+				{ name: "POSTGRES_DB_PORT", value: db.port.apply((p) => p.toString()) },
 			],
 		},
 	},
@@ -581,10 +568,10 @@ const pelicanService = new awsx.ecs.FargateService("pelican-service", {
 			}),
 			environment: [
 				{ name: "POSTGRES_DB_NAME", value: `postgres` },
-				{ name: "POSTGRES_DB_HOST", value: dbAddress },
+				{ name: "POSTGRES_DB_HOST", value: db.address },
 				{ name: "POSTGRES_DB_PORT", value: targetDbPort.toString() },
 				{ name: "AWS_REGION", value: AWS_REGION },
-				{ name: "SQS_QUEUE_URL", value: jobQueueUrl },
+				{ name: "SQS_QUEUE_URL", value: jobQueue.url },
 				{ name: "BATCH_SIZE", value: PELICAN_BATCH_SIZE.toString() },
 			],
 		},
@@ -637,13 +624,7 @@ const emuService = new awsx.ecs.FargateService("emu-service", {
 	},
 });
 
-/**
- * Emu autoscaling configuration
- */
-export const emuClusterName = emuCluster.name;
-export const emuServiceName = emuService.service.name;
-
-const emuResourceId = pulumi.interpolate`service/${emuClusterName}/${emuServiceName}`;
+const emuResourceId = pulumi.interpolate`service/${emuCluster.name}/${emuService.service.name}`;
 
 const ecsTarget = new aws.appautoscaling.Target("ecsTarget", {
 	maxCapacity: 50,
@@ -653,7 +634,7 @@ const ecsTarget = new aws.appautoscaling.Target("ecsTarget", {
 	serviceNamespace: "ecs",
 });
 
-const cpuUtilizationPolicy = new aws.appautoscaling.Policy(
+new aws.appautoscaling.Policy(
 	"cpuUtilizationPolicy",
 	{
 		policyType: "TargetTrackingScaling",
@@ -671,13 +652,7 @@ const cpuUtilizationPolicy = new aws.appautoscaling.Policy(
 	},
 );
 
-/**
- * Pelican autoscaling configuration
- */
-export const pelicanClusterName = pelicanCluster.name;
-export const pelicanServiceName = pelicanService.service.name;
-
-const pelicanResourceId = pulumi.interpolate`service/${pelicanClusterName}/${pelicanServiceName}`;
+const pelicanResourceId = pulumi.interpolate`service/${pelicanCluster.name}/${pelicanService.service.name}`;
 
 const pelicanEcsTarget = new aws.appautoscaling.Target("pelicanEcsTarget", {
 	maxCapacity: 6,
@@ -774,20 +749,4 @@ const refArchDashboard = pulumi
 			}),
 	);
 
-export const refArchDashboardId = refArchDashboard.id;
-
-/**
- * Exports
- *
- * Whatever values are exported here will be output in pulumi's terminal output that displays following an update:
- */
-
-// Networking
 export const frontendServiceUrl = pulumi.interpolate`http://${alb.loadBalancer.dnsName}`;
-
-// Service URNs
-export const serviceUrn = frontendService.urn;
-export const pelicanServiceUrn = pelicanService.urn;
-export const emuServiceUrn = emuService.urn;
-
-export const deadLetterQueueId = deadletterQueue.id;
