@@ -14,7 +14,7 @@
     "@babel/preset-typescript": "^7.23.3",
     "@pinecone-database/pinecone": "^1.1.2-spruceDev.20240103000817",
     "@xenova/transformers": "^2.7.0",
-    "next": "^13.5.4",
+    "next": "^14.2.15",
     "pg": "^8.11.3",
     "react": "^18",
     "react-dom": "^18",
